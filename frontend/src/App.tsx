@@ -13,7 +13,7 @@ function App() {
   const [phone, setPhone] = useState('')
 
   // ☁️ 1. URL DEL SERVIDOR (EN LA NUBE)
-const API_URL = 'https://barberia-cerebro-TU-CODIGO.onrender.com'
+const API_URL = 'https://barberia-cerebro.onrender.com'
 
   useEffect(() => {
     fetch(`${API_URL}/barbers`).then(r => r.json()).then(setBarbers)
