@@ -56,7 +56,18 @@ app.get('/appointments', async (req, res) => {
   });
   res.json(appointments);
 });
-
+// 5. Borrar Cita (NUEVO)
+app.delete('/appointments/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    await prisma.appointment.delete({
+      where: { id: Number(id) }
+    });
+    res.json({ message: 'Cita eliminada' });
+  } catch (error) {
+    res.status(500).json({ error: 'No se pudo borrar' });
+  }
+});
 app.listen(PORT, () => {
   console.log(`🚀 SERVIDOR LISTO en http://localhost:${PORT}`);
 });

@@ -12,9 +12,8 @@ function App() {
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
 
-  // URL DEL SERVIDOR (IP DE TU PC)
-  // URL DEL SERVIDOR (EN LA NUBE)
-const API_URL = 'https://barberia-app-b5yd.onrender.com'
+  // 1. URL DEL SERVIDOR (YA CONECTADO A LA NUBE ☁️)
+  const API_URL = 'https://barberia-app-b5yd.onrender.com'
 
   useEffect(() => {
     fetch(`${API_URL}/barbers`).then(r => r.json()).then(setBarbers)
@@ -48,6 +47,15 @@ const API_URL = 'https://barberia-app-b5yd.onrender.com'
         setName(''); setPhone('')
       } else { alert("❌ Error") }
     } catch (error) { alert("❌ Error de conexión") }
+  }
+
+  // 2. NUEVA FUNCIÓN PARA BORRAR 🗑️
+  const handleDelete = async (id: any) => {
+    if (!confirm("¿Seguro que quieres eliminar esta cita?")) return;
+    try {
+      await fetch(`${API_URL}/appointments/${id}`, { method: 'DELETE' });
+      refreshAppointments(); // Recargar la lista
+    } catch (error) { alert("Error al borrar"); }
   }
 
   // ESTILOS
@@ -114,6 +122,7 @@ const API_URL = 'https://barberia-app-b5yd.onrender.com'
                 <th style={styles.th}>BARBERO</th>
                 <th style={styles.th}>SERVICIO</th>
                 <th style={styles.th}>PRECIO</th>
+                <th style={styles.th}>BORRAR</th> {/* TÍTULO DE COLUMNA NUEVO */}
               </tr>
             </thead>
             <tbody>
@@ -131,6 +140,17 @@ const API_URL = 'https://barberia-app-b5yd.onrender.com'
                   </td>
                   <td style={styles.td}>{cita.service ? cita.service.name : '...'}</td>
                   <td style={styles.td}><span style={styles.badge}>${cita.service ? cita.service.price : '0'}</span></td>
+                  
+                  {/* BOTÓN ROJO NUEVO */}
+                  <td style={styles.td}>
+                    <button 
+                      onClick={() => handleDelete(cita.id)} 
+                      style={{background: '#ff4444', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold'}}
+                    >
+                      🗑️
+                    </button>
+                  </td>
+
                 </tr>
               ))}
             </tbody>
