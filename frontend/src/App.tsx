@@ -12,7 +12,7 @@ function App() {
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
 
-  // 1. URL DEL SERVIDOR (YA CONECTADO A LA NUBE ☁️)
+  // ☁️ 1. URL DEL SERVIDOR (EN LA NUBE)
   const API_URL = 'https://barberia-app-b5yd.onrender.com'
 
   useEffect(() => {
@@ -49,13 +49,23 @@ function App() {
     } catch (error) { alert("❌ Error de conexión") }
   }
 
-  // 2. NUEVA FUNCIÓN PARA BORRAR 🗑️
+  // 🗑️ 2. FUNCIÓN PARA BORRAR
   const handleDelete = async (id: any) => {
     if (!confirm("¿Seguro que quieres eliminar esta cita?")) return;
     try {
       await fetch(`${API_URL}/appointments/${id}`, { method: 'DELETE' });
-      refreshAppointments(); // Recargar la lista
+      refreshAppointments(); 
     } catch (error) { alert("Error al borrar"); }
+  }
+
+  // 🔒 3. SEGURIDAD PARA ENTRAR A ADMIN
+  const handleAdminEnter = () => {
+    const password = prompt("🔒 Área restringida. Ingresa la contraseña:");
+    if (password === "1234") { // <--- AQUÍ CAMBIAS LA CLAVE
+      setView('admin');
+    } else {
+      alert("⛔ Contraseña incorrecta");
+    }
   }
 
   // ESTILOS
@@ -80,7 +90,8 @@ function App() {
 
       <div style={styles.nav}>
         <button onClick={() => setView('cliente')} style={styles.btn(view === 'cliente')}>🧔 CLIENTE</button>
-        <button onClick={() => setView('admin')} style={styles.btn(view === 'admin')}>🛡️ ADMIN</button>
+        {/* BOTÓN CON CANDADO */}
+        <button onClick={handleAdminEnter} style={styles.btn(view === 'admin')}>🛡️ ADMIN</button>
       </div>
 
       {view === 'cliente' ? (
@@ -122,7 +133,7 @@ function App() {
                 <th style={styles.th}>BARBERO</th>
                 <th style={styles.th}>SERVICIO</th>
                 <th style={styles.th}>PRECIO</th>
-                <th style={styles.th}>BORRAR</th> {/* TÍTULO DE COLUMNA NUEVO */}
+                <th style={styles.th}>BORRAR</th>
               </tr>
             </thead>
             <tbody>
@@ -141,7 +152,6 @@ function App() {
                   <td style={styles.td}>{cita.service ? cita.service.name : '...'}</td>
                   <td style={styles.td}><span style={styles.badge}>${cita.service ? cita.service.price : '0'}</span></td>
                   
-                  {/* BOTÓN ROJO NUEVO */}
                   <td style={styles.td}>
                     <button 
                       onClick={() => handleDelete(cita.id)} 
