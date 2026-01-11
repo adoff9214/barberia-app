@@ -13,7 +13,8 @@ function App() {
   const [phone, setPhone] = useState('')
 
   // URL DEL SERVIDOR (IP DE TU PC)
-  const API_URL = 'http://192.168.3.39:3000'
+  // URL DEL SERVIDOR (EN LA NUBE)
+const API_URL = 'https://barberia-app-b5yd.onrender.com'
 
   useEffect(() => {
     fetch(`${API_URL}/barbers`).then(r => r.json()).then(setBarbers)
