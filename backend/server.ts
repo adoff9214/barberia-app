@@ -70,4 +70,4 @@ app.delete('/appointments/:id', async (req, res) => {
 });
 app.listen(PORT, () => {
   console.log(`🚀 SERVIDOR LISTO en http://localhost:${PORT}`);
-});
+});// despertando al servidor
