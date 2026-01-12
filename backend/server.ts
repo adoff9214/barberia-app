@@ -6,6 +6,7 @@ const prisma = new PrismaClient();
 const app = express();
 const PORT = 3000;
 
+// Middleware (El pase VIP para que el celular entre)
 app.use(cors());
 app.use(express.json());
 
@@ -21,15 +22,15 @@ app.get('/services', async (req, res) => {
   res.json(services);
 });
 
-// 3. Agendar Cita (AHORA ACEPTA FECHA MANUAL)
+// 3. Agendar Cita
 app.post('/appointments', async (req, res) => {
   try {
-    // Recibimos la 'date' (fecha) desde el Frontend
     const { barberId, serviceId, clientName, clientPhone, date } = req.body;
     
-    // Si el cliente eligió fecha, usamos esa. Si no, usamos la de hoy.
+    // Si envían fecha la usamos, si no, usamos "ahora"
     const fechaInicio = date ? new Date(date) : new Date();
-    const fechaFin = new Date(fechaInicio.getTime() + 30 * 60000); // +30 mins
+    // Duración automática de 30 mins
+    const fechaFin = new Date(fechaInicio.getTime() + 30 * 60000);
 
     const newAppointment = await prisma.appointment.create({
       data: {
@@ -48,7 +49,7 @@ app.post('/appointments', async (req, res) => {
   }
 });
 
-// 4. Ver Citas (Dashboard)
+// 4. Ver Citas (Dashboard Admin)
 app.get('/appointments', async (req, res) => {
   const appointments = await prisma.appointment.findMany({
     include: { barber: true, service: true },
@@ -56,7 +57,8 @@ app.get('/appointments', async (req, res) => {
   });
   res.json(appointments);
 });
-// 5. Borrar Cita (NUEVO)
+
+// 5. Borrar Cita
 app.delete('/appointments/:id', async (req, res) => {
   const { id } = req.params;
   try {
@@ -67,7 +69,9 @@ app.delete('/appointments/:id', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: 'No se pudo borrar' });
   }
-});// 6. Contratar Barbero (NUEVO)
+});
+
+// 6. Contratar Barbero (NUEVO)
 app.post('/barbers', async (req, res) => {
   try {
     const { name } = req.body;
@@ -84,20 +88,18 @@ app.post('/barbers', async (req, res) => {
 app.delete('/barbers/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    // Primero borramos sus citas para que no de error
     await prisma.appointment.deleteMany({ where: { barberId: Number(id) } });
-    // Luego borramos al barbero
     await prisma.barber.delete({ where: { id: Number(id) } });
     res.json({ message: 'Barbero eliminado' });
   } catch (error) {
     res.status(500).json({ error: 'No se pudo eliminar' });
   }
 });
-// 8. Crear Servicio Nuevo (Precio editable)
+
+// 8. Crear Servicio (Gestión Precios)
 app.post('/services', async (req, res) => {
   try {
     const { name, price } = req.body;
-    // Creamos el servicio (Duración por defecto 30 min para facilitar)
     const newService = await prisma.service.create({
       data: { name, price: Number(price), duration: 30 }
     });
@@ -111,15 +113,15 @@ app.post('/services', async (req, res) => {
 app.delete('/services/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    // Primero borramos citas de este servicio para evitar errores
     await prisma.appointment.deleteMany({ where: { serviceId: Number(id) } });
-    // Luego borramos el servicio
     await prisma.service.delete({ where: { id: Number(id) } });
     res.json({ message: 'Servicio eliminado' });
   } catch (error) {
     res.status(500).json({ error: 'No se pudo eliminar servicio' });
   }
 });
+
+// Arrancar el servidor
 app.listen(PORT, () => {
   console.log(`🚀 SERVIDOR LISTO en http://localhost:${PORT}`);
-});// despertando al servidor
+});
