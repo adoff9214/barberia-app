@@ -6,10 +6,9 @@ function App() {
   const [newServiceName, setNewServiceName] = useState('')
   const [newServicePrice, setNewServicePrice] = useState('')
   const [view, setView] = useState('cliente')
-  const [barbers, setBarbers] = useState([])
-  const [services, setServices] = useState([])
-  const [appointments, setAppointments] = useState([])
-  
+const [barbers, setBarbers] = useState<any[]>([])
+const [services, setServices] = useState<any[]>([])
+const [appointments, setAppointments] = useState<any[]>([])
   // DATOS DEL FORMULARIO
   const [selectedBarber, setSelectedBarber] = useState('')
   const [selectedService, setSelectedService] = useState('')
