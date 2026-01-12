@@ -22,7 +22,7 @@ function App() {
   // ☁️ URL DEL SERVIDOR (EN LA NUBE)
   const API_URL = 'https://barberia-cerebro.onrender.com'
 
-  // LISTA DE HORAS FIJAS
+  // LISTA DE HORAS (El sistema usa 24h internamente, pero abajo lo convertimos a AM/PM visualmente)
   const timeSlots = [
     "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
     "12:00", "12:30", "13:00", "13:30", "14:00", "14:30",
@@ -177,8 +177,8 @@ function App() {
             <div style={{flex: 1}}>
                <label style={styles.label}>DÍA</label>
                <input 
-                 type="date" 
-                 min={new Date().toISOString().split('T')[0]}
+                 type="date"
+                 min={new Date().toISOString().split('T')[0]} 
                  style={styles.input}
                  onChange={e => setSelectedDate(e.target.value)}
                />
@@ -189,10 +189,19 @@ function App() {
                  style={styles.select}
                  onChange={e => setSelectedTime(e.target.value)}
                >
-                 <option value="">Hora...</option>
-                 {timeSlots.map(time => (
-                   <option key={time} value={time}>{time}</option>
-                 ))}
+                 <option value="">Selecciona hora...</option>
+                 {timeSlots.map(time => {
+                   // CONVERTIDOR A 12 HORAS (AM/PM) SOLO PARA VISUALIZAR
+                   const [h, m] = time.split(':')
+                   const hour = parseInt(h)
+                   const ampm = hour >= 12 ? 'PM' : 'AM'
+                   const hour12 = hour % 12 || 12
+                   const displayTime = `${hour12}:${m} ${ampm}`
+                   
+                   return (
+                     <option key={time} value={time}>{displayTime}</option>
+                   )
+                 })}
                </select>
             </div>
           </div>
@@ -245,7 +254,7 @@ function App() {
                   <div style={{flex: 1}}>
                     {new Date(cita.date).toLocaleDateString()} <br/>
                     <span style={{color: '#4CAF50', fontWeight: 'bold'}}>
-                      {new Date(cita.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                      {new Date(cita.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: true})}
                     </span>
                   </div>
                   <div style={{flex: 1}}>{cita.clientName}</div>
