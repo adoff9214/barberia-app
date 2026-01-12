@@ -10,29 +10,43 @@ function App() {
   const [services, setServices] = useState([])
   const [appointments, setAppointments] = useState([])
   
+  // DATOS DEL FORMULARIO
   const [selectedBarber, setSelectedBarber] = useState('')
   const [selectedService, setSelectedService] = useState('')
+  const [selectedDate, setSelectedDate] = useState('') 
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
 
-  // ☁️ 1. URL DEL SERVIDOR (EN LA NUBE)
+  // ☁️ URL DEL SERVIDOR
   const API_URL = 'https://barberia-cerebro.onrender.com'
 
   useEffect(() => {
-    fetch(`${API_URL}/barbers`).then(r => r.json()).then(setBarbers)
-    fetch(`${API_URL}/services`).then(r => r.json()).then(setServices)
+    fetch(`${API_URL}/barbers`)
+      .then(r => r.json())
+      .then(data => { if(Array.isArray(data)) setBarbers(data) })
+      .catch(e => console.error("Error barberos:", e))
+
+    fetch(`${API_URL}/services`)
+      .then(r => r.json())
+      .then(data => { if(Array.isArray(data)) setServices(data) })
+      .catch(e => console.error("Error servicios:", e))
+
     refreshAppointments()
   }, [])
 
   const refreshAppointments = () => {
-    fetch(`${API_URL}/appointments`).then(r => r.json()).then(setAppointments)
+    fetch(`${API_URL}/appointments`)
+      .then(r => r.json())
+      .then(data => { if(Array.isArray(data)) setAppointments(data) })
+      .catch(e => console.error("Error citas:", e))
   }
 
   const handleBooking = async () => {
-    if (!selectedBarber || !selectedService || !name) {
-      alert("⚠️ Faltan datos")
+    if (!selectedBarber || !selectedService || !name || !selectedDate) {
+      alert("⚠️ Faltan datos (Elige barbero, servicio, fecha y pon tu nombre)")
       return
     }
+    
     try {
       const response = await fetch(`${API_URL}/appointments`, {
         method: 'POST',
@@ -41,49 +55,50 @@ function App() {
           barberId: selectedBarber,
           serviceId: selectedService,
           clientName: name,
-          clientPhone: phone
+          clientPhone: phone,
+          date: selectedDate
         })
       })
+
+      const data = await response.json()
+
       if (response.ok) {
         alert(`✅ ¡Cita Agendada!`)
         refreshAppointments()
-        setName(''); setPhone('')
-      } else { alert("❌ Error") }
+        setName(''); setPhone(''); setSelectedDate('')
+      } else { 
+        alert(`❌ Error: ${data.error}`) 
+      }
     } catch (error) { alert("❌ Error de conexión") }
   }
 
-  // 🗑️ 2. FUNCIÓN PARA BORRAR CITA
+  // --- FUNCIONES DE ADMIN ---
+
   const handleDelete = async (id: any) => {
-    if (!confirm("¿Seguro que quieres eliminar esta cita?")) return;
-    try {
-      await fetch(`${API_URL}/appointments/${id}`, { method: 'DELETE' });
-      refreshAppointments(); 
-    } catch (error) { alert("Error al borrar"); }
+    if (!confirm("¿Borrar cita?")) return;
+    await fetch(`${API_URL}/appointments/${id}`, { method: 'DELETE' });
+    refreshAppointments(); 
   }
 
-  // 👔 3. FUNCIÓN PARA CONTRATAR
   const hireBarber = async () => {
-    if (!newBarberName) return alert('Escribe un nombre')
+    if (!newBarberName) return;
     await fetch(`${API_URL}/barbers`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: newBarberName })
     })
     setNewBarberName('')
-    // Actualización silenciosa
     fetch(`${API_URL}/barbers`).then(r => r.json()).then(setBarbers)
   }
 
-  // 🔥 4. FUNCIÓN PARA DESPEDIR
   const fireBarber = async (id: any) => {
-    if (!confirm('¿Seguro que quieres despedir a este barbero?')) return
+    if (!confirm('¿Despedir?')) return
     await fetch(`${API_URL}/barbers/${id}`, { method: 'DELETE' })
     fetch(`${API_URL}/barbers`).then(r => r.json()).then(setBarbers)
   }
 
-  // 💰 5. CREAR SERVICIO (NUEVO)
   const createService = async () => {
-    if (!newServiceName || !newServicePrice) return alert('Faltan datos')
+    if (!newServiceName || !newServicePrice) return;
     await fetch(`${API_URL}/services`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -91,48 +106,38 @@ function App() {
     })
     setNewServiceName('')
     setNewServicePrice('')
-    // Actualización silenciosa
     fetch(`${API_URL}/services`).then(r => r.json()).then(setServices)
   }
 
-  // 🗑️ 6. BORRAR SERVICIO (NUEVO)
   const deleteService = async (id: any) => {
-    if (!confirm('¿Borrar este servicio?')) return
+    if (!confirm('¿Borrar servicio?')) return
     await fetch(`${API_URL}/services/${id}`, { method: 'DELETE' })
     fetch(`${API_URL}/services`).then(r => r.json()).then(setServices)
   }
 
-  // 🔒 7. SEGURIDAD PARA ENTRAR A ADMIN
   const handleAdminEnter = () => {
-    const password = prompt("🔒 Área restringida. Ingresa la contraseña:");
-    if (password === "1234") { 
-      setView('admin');
-    } else {
-      alert("⛔ Contraseña incorrecta");
-    }
+    const password = prompt("🔒 Contraseña:");
+    if (password === "1234") setView('admin');
+    else alert("⛔ Incorrecto");
   }
 
   // ESTILOS
   const styles: any = {
-    container: { fontFamily: "'Segoe UI', sans-serif", minHeight: '100vh', background: '#121212', color: 'white', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px' },
-    nav: { marginBottom: '40px', background: '#1e1e1e', padding: '10px', borderRadius: '50px', display: 'flex', gap: '10px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' },
-    btn: (active: boolean) => ({ background: active ? 'linear-gradient(45deg, #00d2ff, #3a7bd5)' : 'transparent', color: active ? 'white' : '#888', border: 'none', padding: '12px 30px', borderRadius: '30px', cursor: 'pointer', fontWeight: 'bold', transition: '0.3s', fontSize: '16px' }),
-    card: { background: '#1e1e1e', padding: '40px', borderRadius: '20px', width: '100%', maxWidth: '500px', boxShadow: '0 20px 50px rgba(0,0,0,0.5)', border: '1px solid #333' },
-    input: { width: '100%', padding: '15px', background: '#2a2a2a', border: '1px solid #444', color: 'white', borderRadius: '10px', marginBottom: '15px', fontSize: '16px', outline: 'none', boxSizing: 'border-box' },
-    label: { display: 'block', marginBottom: '8px', color: '#aaa', fontSize: '14px', fontWeight: '600' },
-    actionBtn: { width: '100%', padding: '18px', background: 'linear-gradient(45deg, #11998e, #38ef7d)', border: 'none', borderRadius: '12px', color: 'white', fontWeight: 'bold', fontSize: '18px', cursor: 'pointer', marginTop: '10px', boxShadow: '0 10px 20px rgba(56, 239, 125, 0.2)' },
-    button: { padding: '10px', background: '#2196F3', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' },
-    table: { width: '100%', borderCollapse: 'collapse', marginTop: '20px' },
-    th: { textAlign: 'left', padding: '15px', color: '#666', borderBottom: '1px solid #333', fontSize: '14px' },
-    td: { padding: '20px 15px', borderBottom: '1px solid #2a2a2a', fontSize: '16px' },
-    badge: { background: 'rgba(56, 239, 125, 0.1)', color: '#38ef7d', padding: '5px 10px', borderRadius: '5px', fontSize: '14px', fontWeight: 'bold' }
+    container: { fontFamily: "sans-serif", minHeight: '100vh', background: '#121212', color: 'white', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px' },
+    nav: { marginBottom: '20px', background: '#333', padding: '10px', borderRadius: '30px', display: 'flex', gap: '10px' },
+    btn: (active: boolean) => ({ background: active ? '#2196F3' : 'transparent', color: active ? 'white' : '#aaa', border: 'none', padding: '10px 20px', borderRadius: '20px', fontWeight: 'bold' }),
+    card: { background: '#1e1e1e', padding: '20px', borderRadius: '15px', width: '100%', maxWidth: '500px', marginBottom: '20px', border: '1px solid #333' },
+    input: { width: '100%', padding: '12px', background: '#333', border: 'none', color: 'white', borderRadius: '8px', marginBottom: '15px', fontSize: '16px', boxSizing: 'border-box' },
+    label: { display: 'block', marginBottom: '5px', color: '#aaa', fontSize: '12px', fontWeight: 'bold' },
+    actionBtn: { width: '100%', padding: '15px', background: '#4CAF50', border: 'none', borderRadius: '10px', color: 'white', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer' },
+    button: { padding: '8px', background: '#2196F3', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' },
+    row: { display: 'flex', justifyContent: 'space-between', padding: '10px', borderBottom: '1px solid #333', alignItems: 'center' }
   }
 
   return (
     <div style={styles.container}>
-      <h1 style={{ marginBottom: '10px', fontSize: '2.5rem', background: '-webkit-linear-gradient(45deg, #eee, #999)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>💈 BARBER PRO 💈</h1>
-      <p style={{ color: '#666', marginBottom: '40px' }}>Sistema de Gestión Premium</p>
-
+      <h1 style={{ marginBottom: '10px' }}>💈 BARBER PRO 💈</h1>
+      
       <div style={styles.nav}>
         <button onClick={() => setView('cliente')} style={styles.btn(view === 'cliente')}>🧔 CLIENTE</button>
         <button onClick={handleAdminEnter} style={styles.btn(view === 'admin')}>🛡️ ADMIN</button>
@@ -140,139 +145,92 @@ function App() {
 
       {view === 'cliente' ? (
         <div style={styles.card}>
-          <h2 style={{ marginBottom: '25px', textAlign: 'center' }}>Nueva Reserva</h2>
+          <h2 style={{ textAlign: 'center' }}>Reserva tu Cita</h2>
           
           <label style={styles.label}>BARBERO</label>
           <select onChange={e => setSelectedBarber(e.target.value)} style={styles.input}>
-            <option value="">Selecciona un experto...</option>
+            <option value="">Selecciona...</option>
             {barbers.map((b: any) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
 
           <label style={styles.label}>SERVICIO</label>
           <select onChange={e => setSelectedService(e.target.value)} style={styles.input}>
-            <option value="">Selecciona el corte...</option>
+            <option value="">Selecciona...</option>
             {services.map((s: any) => <option key={s.id} value={s.id}>{s.name} - ${s.price}</option>)}
           </select>
 
+          <label style={styles.label}>FECHA Y HORA</label>
+          <input 
+            type="datetime-local" 
+            style={styles.input} 
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+          />
+
           <label style={styles.label}>TU NOMBRE</label>
-          <input type="text" placeholder="Tu nombre completo" value={name} onChange={e => setName(e.target.value)} style={styles.input} />
+          <input type="text" placeholder="Nombre" value={name} onChange={e => setName(e.target.value)} style={styles.input} />
 
           <label style={styles.label}>TELÉFONO</label>
-          <input type="text" placeholder="(555) 000-0000" value={phone} onChange={e => setPhone(e.target.value)} style={styles.input} />
+          <input type="text" placeholder="Teléfono" value={phone} onChange={e => setPhone(e.target.value)} style={styles.input} />
 
-          <button onClick={handleBooking} style={styles.actionBtn}>🔥 CONFIRMAR CITA</button>
+          <button onClick={handleBooking} style={styles.actionBtn}>CONFIRMAR CITA ✅</button>
         </div>
       ) : (
-        /* 🛡️ VISTA DE ADMIN */
+        /* VISTA ADMIN */
         <> 
-          {/* TARJETA 1: AGENDA */}
-          <div style={{ ...styles.card, maxWidth: '900px', marginBottom: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-              <h2 style={{ margin: 0 }}>Agenda en Vivo</h2>
-              <button onClick={refreshAppointments} style={{ background: '#333', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '10px', cursor: 'pointer' }}>🔄 Refrescar</button>
+          <div style={styles.card}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+              <h3>📅 Agenda</h3>
+              <button onClick={refreshAppointments} style={{background:'#444', color:'white', border:'none', borderRadius:'5px'}}>🔄</button>
             </div>
 
-            <table style={styles.table}>
-              <thead>
-                <tr>
-                  <th style={styles.th}>HORA</th>
-                  <th style={styles.th}>CLIENTE</th>
-                  <th style={styles.th}>BARBERO</th>
-                  <th style={styles.th}>SERVICIO</th>
-                  <th style={styles.th}>PRECIO</th>
-                  <th style={styles.th}>BORRAR</th>
-                </tr>
-              </thead>
-              <tbody>
-                {appointments.map((cita: any) => (
-                  <tr key={cita.id}>
-                    <td style={{ ...styles.td, color: '#888' }}>
-                      {new Date(cita.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </td>
-                    <td style={{ ...styles.td, fontWeight: 'bold' }}>{cita.clientName}</td>
-                    <td style={styles.td}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: '#333', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✂️</div>
-                        {cita.barber ? cita.barber.name : '...'}
-                      </div>
-                    </td>
-                    <td style={styles.td}>{cita.service ? cita.service.name : '...'}</td>
-                    <td style={styles.td}><span style={styles.badge}>${cita.service ? cita.service.price : '0'}</span></td>
-                    
-                    <td style={styles.td}>
-                      <button 
-                        onClick={() => handleDelete(cita.id)} 
-                        style={{background: '#ff4444', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold'}}
-                      >
-                        🗑️
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {appointments.length === 0 && <p style={{ textAlign: 'center', color: '#555', marginTop: '30px' }}>No hay citas hoy. A descansar. 😴</p>}
+            {/* LISTA DE CITAS */}
+            {appointments.length === 0 ? <p style={{color:'#666', textAlign:'center'}}>No hay citas.</p> : null}
+            
+            {appointments.map((cita: any) => (
+              <div key={cita.id} style={styles.row}>
+                <div>
+                   <div style={{fontWeight:'bold', color:'#2196F3'}}>
+                     {new Date(cita.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                   </div>
+                   <div style={{fontSize:'12px', color:'#aaa'}}>
+                     {new Date(cita.date).toLocaleDateString()}
+                   </div>
+                   <div>{cita.clientName} ({cita.service?.name})</div>
+                </div>
+                <button onClick={() => handleDelete(cita.id)} style={{background:'red', border:'none', borderRadius:'5px', padding:'5px'}}>🗑️</button>
+              </div>
+            ))}
           </div>
 
-          {/* TARJETA 2: GESTIÓN DE EQUIPO */}
           <div style={styles.card}>
-            <h2>Gestión de Equipo 💈</h2>
-            <div style={{display: 'flex', gap: '10px', marginBottom: '20px'}}>
-              <input
-                style={styles.input}
-                placeholder="Nuevo Barbero..."
-                value={newBarberName}
-                onChange={(e) => setNewBarberName(e.target.value)}
-              />
-              <button style={styles.button} onClick={hireBarber}>AGREGAR</button>
+            <h3>👥 Equipo</h3>
+            <div style={{display: 'flex', gap: '5px', marginBottom: '10px'}}>
+              <input style={styles.input} placeholder="Nombre..." value={newBarberName} onChange={(e) => setNewBarberName(e.target.value)} />
+              <button style={styles.button} onClick={hireBarber}>➕</button>
             </div>
-
             {barbers.map((b: any) => (
-              <div key={b.id} style={{display: 'flex', justifyContent: 'space-between', padding: '10px', borderBottom: '1px solid #444', alignItems: 'center'}}>
-                <span style={{color: 'white', fontWeight: 'bold'}}>{b.name}</span>
-                <button 
-                  onClick={() => fireBarber(b.id)}
-                  style={{background: '#D32F2F', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer'}}
-                >
-                  DESPEDIR 🗑️
-                </button>
+              <div key={b.id} style={styles.row}>
+                <span>{b.name}</span>
+                <button onClick={() => fireBarber(b.id)} style={{background:'#D32F2F', color:'white', border:'none', borderRadius:'5px'}}>🗑️</button>
               </div>
             ))}
           </div>
           
-          {/* TARJETA 3: MENÚ DE PRECIOS (NUEVO) */}
-          <div style={{...styles.card, marginTop: '20px'}}>
-            <h2>Menú de Precios 💰</h2>
-            <div style={{display: 'flex', gap: '10px', marginBottom: '20px'}}>
-              <input
-                style={styles.input}
-                placeholder="Nombre (ej. Corte Niño)"
-                value={newServiceName}
-                onChange={(e) => setNewServiceName(e.target.value)}
-              />
-              <input
-                style={{...styles.input, width: '100px'}}
-                placeholder="$ Precio"
-                type="number"
-                value={newServicePrice}
-                onChange={(e) => setNewServicePrice(e.target.value)}
-              />
+          <div style={styles.card}>
+            <h3>💰 Precios</h3>
+            <div style={{display: 'flex', gap: '5px', marginBottom: '10px'}}>
+              <input style={styles.input} placeholder="Servicio" value={newServiceName} onChange={(e) => setNewServiceName(e.target.value)} />
+              <input style={{...styles.input, width:'80px'}} placeholder="$" type="number" value={newServicePrice} onChange={(e) => setNewServicePrice(e.target.value)} />
               <button style={styles.button} onClick={createService}>➕</button>
             </div>
-
             {services.map((s: any) => (
-              <div key={s.id} style={{display: 'flex', justifyContent: 'space-between', padding: '10px', borderBottom: '1px solid #444'}}>
-                <span style={{color: 'white'}}>{s.name} - <b>${s.price}</b></span>
-                <button 
-                  onClick={() => deleteService(s.id)}
-                  style={{background: 'red', border: 'none', borderRadius: '5px', cursor: 'pointer'}}
-                >
-                  🗑️
-                </button>
+              <div key={s.id} style={styles.row}>
+                <span>{s.name} - ${s.price}</span>
+                <button onClick={() => deleteService(s.id)} style={{background:'#D32F2F', color:'white', border:'none', borderRadius:'5px'}}>🗑️</button>
               </div>
             ))}
           </div>
-
         </> 
       )}
     </div>
