@@ -3,6 +3,8 @@ import './App.css'
 
 function App() {
   const [newBarberName, setNewBarberName] = useState('')
+  const [newServiceName, setNewServiceName] = useState('')
+  const [newServicePrice, setNewServicePrice] = useState('')
   const [view, setView] = useState('cliente')
   const [barbers, setBarbers] = useState([])
   const [services, setServices] = useState([])
@@ -68,7 +70,7 @@ function App() {
       body: JSON.stringify({ name: newBarberName })
     })
     setNewBarberName('')
-    // Recargamos la página para ver el cambio
+    // Actualización silenciosa
     fetch(`${API_URL}/barbers`).then(r => r.json()).then(setBarbers)
   }
 
@@ -79,7 +81,28 @@ function App() {
     fetch(`${API_URL}/barbers`).then(r => r.json()).then(setBarbers)
   }
 
-  // 🔒 5. SEGURIDAD PARA ENTRAR A ADMIN
+  // 💰 5. CREAR SERVICIO (NUEVO)
+  const createService = async () => {
+    if (!newServiceName || !newServicePrice) return alert('Faltan datos')
+    await fetch(`${API_URL}/services`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newServiceName, price: newServicePrice })
+    })
+    setNewServiceName('')
+    setNewServicePrice('')
+    // Actualización silenciosa
+    fetch(`${API_URL}/services`).then(r => r.json()).then(setServices)
+  }
+
+  // 🗑️ 6. BORRAR SERVICIO (NUEVO)
+  const deleteService = async (id: any) => {
+    if (!confirm('¿Borrar este servicio?')) return
+    await fetch(`${API_URL}/services/${id}`, { method: 'DELETE' })
+    fetch(`${API_URL}/services`).then(r => r.json()).then(setServices)
+  }
+
+  // 🔒 7. SEGURIDAD PARA ENTRAR A ADMIN
   const handleAdminEnter = () => {
     const password = prompt("🔒 Área restringida. Ingresa la contraseña:");
     if (password === "1234") { 
@@ -98,6 +121,7 @@ function App() {
     input: { width: '100%', padding: '15px', background: '#2a2a2a', border: '1px solid #444', color: 'white', borderRadius: '10px', marginBottom: '15px', fontSize: '16px', outline: 'none', boxSizing: 'border-box' },
     label: { display: 'block', marginBottom: '8px', color: '#aaa', fontSize: '14px', fontWeight: '600' },
     actionBtn: { width: '100%', padding: '18px', background: 'linear-gradient(45deg, #11998e, #38ef7d)', border: 'none', borderRadius: '12px', color: 'white', fontWeight: 'bold', fontSize: '18px', cursor: 'pointer', marginTop: '10px', boxShadow: '0 10px 20px rgba(56, 239, 125, 0.2)' },
+    button: { padding: '10px', background: '#2196F3', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' },
     table: { width: '100%', borderCollapse: 'collapse', marginTop: '20px' },
     th: { textAlign: 'left', padding: '15px', color: '#666', borderBottom: '1px solid #333', fontSize: '14px' },
     td: { padding: '20px 15px', borderBottom: '1px solid #2a2a2a', fontSize: '16px' },
@@ -139,7 +163,7 @@ function App() {
           <button onClick={handleBooking} style={styles.actionBtn}>🔥 CONFIRMAR CITA</button>
         </div>
       ) : (
-        /* 🛡️ VISTA DE ADMIN (INICIO DEL FRAGMENTO) */
+        /* 🛡️ VISTA DE ADMIN */
         <> 
           {/* TARJETA 1: AGENDA */}
           <div style={{ ...styles.card, maxWidth: '900px', marginBottom: '20px' }}>
@@ -183,7 +207,6 @@ function App() {
                         🗑️
                       </button>
                     </td>
-
                   </tr>
                 ))}
               </tbody>
@@ -201,12 +224,7 @@ function App() {
                 value={newBarberName}
                 onChange={(e) => setNewBarberName(e.target.value)}
               />
-              <button 
-                style={{padding: '10px', background: '#2196F3', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold'}} 
-                onClick={hireBarber}
-              >
-                AGREGAR
-              </button>
+              <button style={styles.button} onClick={hireBarber}>AGREGAR</button>
             </div>
 
             {barbers.map((b: any) => (
@@ -220,9 +238,42 @@ function App() {
                 </button>
               </div>
             ))}
-          </div> 
+          </div>
+          
+          {/* TARJETA 3: MENÚ DE PRECIOS (NUEVO) */}
+          <div style={{...styles.card, marginTop: '20px'}}>
+            <h2>Menú de Precios 💰</h2>
+            <div style={{display: 'flex', gap: '10px', marginBottom: '20px'}}>
+              <input
+                style={styles.input}
+                placeholder="Nombre (ej. Corte Niño)"
+                value={newServiceName}
+                onChange={(e) => setNewServiceName(e.target.value)}
+              />
+              <input
+                style={{...styles.input, width: '100px'}}
+                placeholder="$ Precio"
+                type="number"
+                value={newServicePrice}
+                onChange={(e) => setNewServicePrice(e.target.value)}
+              />
+              <button style={styles.button} onClick={createService}>➕</button>
+            </div>
+
+            {services.map((s: any) => (
+              <div key={s.id} style={{display: 'flex', justifyContent: 'space-between', padding: '10px', borderBottom: '1px solid #444'}}>
+                <span style={{color: 'white'}}>{s.name} - <b>${s.price}</b></span>
+                <button 
+                  onClick={() => deleteService(s.id)}
+                  style={{background: 'red', border: 'none', borderRadius: '5px', cursor: 'pointer'}}
+                >
+                  🗑️
+                </button>
+              </div>
+            ))}
+          </div>
+
         </> 
-        /* 🏁 FIN DEL FRAGMENTO */
       )}
     </div>
   )
