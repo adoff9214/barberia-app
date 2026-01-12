@@ -3,7 +3,6 @@ import './App.css'
 
 function App() {
   // --- ESTADOS (MEMORIA) ---
-  // Usamos <any[]> para que TypeScript no se queje de que están vacíos al principio
   const [barbers, setBarbers] = useState<any[]>([])
   const [services, setServices] = useState<any[]>([])
   const [appointments, setAppointments] = useState<any[]>([])
@@ -11,14 +10,13 @@ function App() {
   // Datos del formulario
   const [selectedBarber, setSelectedBarber] = useState('')
   const [selectedService, setSelectedService] = useState('')
-  const [selectedDate, setSelectedDate] = useState('') // Fecha del calendario
-  const [selectedTime, setSelectedTime] = useState('') // Hora seleccionada
+  const [selectedDate, setSelectedDate] = useState('') 
+  const [selectedTime, setSelectedTime] = useState('') 
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
 
   // Datos para gestión de admin
   const [view, setView] = useState('cliente') // 'cliente' o 'admin'
-  const [adminPass, setAdminPass] = useState('')
   const [newBarberName, setNewBarberName] = useState('')
 
   // ☁️ URL DEL SERVIDOR (EN LA NUBE)
@@ -32,7 +30,7 @@ function App() {
     "18:00", "18:30"
   ]
 
-  // AL CARGAR LA PÁGINA: Descargar barberos y servicios
+  // AL CARGAR LA PÁGINA
   useEffect(() => {
     fetchBarbers()
     fetchServices()
@@ -59,7 +57,7 @@ function App() {
       return
     }
 
-    // Combinar fecha y hora en un solo texto para el servidor
+    // Combinar fecha y hora
     const finalDate = new Date(`${selectedDate}T${selectedTime}`)
 
     try {
@@ -71,7 +69,7 @@ function App() {
           serviceId: selectedService,
           clientName: name,
           clientPhone: phone,
-          date: finalDate // Enviamos la fecha combinada
+          date: finalDate 
         }),
       })
 
@@ -79,7 +77,7 @@ function App() {
         alert("✅ ¡Cita reservada con éxito!")
         setName('')
         setPhone('')
-        refreshAppointments() // Recargar la lista para el admin
+        refreshAppointments() 
       } else {
         alert("❌ Hubo un error al reservar")
       }
@@ -105,20 +103,20 @@ function App() {
       body: JSON.stringify({ name: newBarberName })
     })
     setNewBarberName('')
-    fetchBarbers() // Recargar lista sin refrescar página
+    fetchBarbers() 
   }
 
   const fireBarber = async (id: any) => {
     if (!confirm('¿Seguro que quieres despedir a este barbero?')) return
     await fetch(`${API_URL}/barbers/${id}`, { method: 'DELETE' })
-    fetchBarbers() // Recargar lista sin refrescar página
+    fetchBarbers() 
   }
 
   // --- PARTE VISUAL (HTML) ---
   return (
     <div style={styles.container}>
       
-      {/* HEADER / MENÚ SUPERIOR */}
+      {/* HEADER */}
       <div style={{textAlign: 'center', marginBottom: '30px'}}>
         <h1 style={{fontSize: '2.5rem', margin: '0'}}>💈 BARBER PRO 💈</h1>
         <p style={{color: '#888'}}>Sistema de Gestión Premium</p>
@@ -231,7 +229,6 @@ function App() {
             </div>
 
             <div style={{marginTop: '20px'}}>
-              {/* Encabezados de tabla */}
               <div style={{display: 'flex', padding: '10px', background: '#333', borderRadius: '5px', fontWeight: 'bold', fontSize: '0.9rem'}}>
                 <div style={{flex: 1}}>Fecha/Hora</div>
                 <div style={{flex: 1}}>Cliente</div>
@@ -240,7 +237,6 @@ function App() {
                 <div style={{width: '40px'}}></div>
               </div>
 
-              {/* Lista de citas */}
               {appointments.length === 0 && <p style={{textAlign: 'center', color: '#666', marginTop: '20px'}}>No hay citas aún.</p>}
 
               {appointments.map((cita: any) => (
@@ -294,7 +290,6 @@ function App() {
   )
 }
 
-// ESTILOS SIMPLES (CSS EN JS)
 const styles = {
   container: { maxWidth: '500px', margin: '0 auto', padding: '20px', fontFamily: 'Arial, sans-serif', color: 'white' },
   card: { background: '#1a1a1a', padding: '20px', borderRadius: '15px', boxShadow: '0 4px 15px rgba(0,0,0,0.5)', marginBottom: '20px' },
