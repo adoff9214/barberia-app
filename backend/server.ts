@@ -93,6 +93,33 @@ app.delete('/barbers/:id', async (req, res) => {
     res.status(500).json({ error: 'No se pudo eliminar' });
   }
 });
+// 8. Crear Servicio Nuevo (Precio editable)
+app.post('/services', async (req, res) => {
+  try {
+    const { name, price } = req.body;
+    // Creamos el servicio (Duración por defecto 30 min para facilitar)
+    const newService = await prisma.service.create({
+      data: { name, price: Number(price), duration: 30 }
+    });
+    res.json(newService);
+  } catch (error) {
+    res.status(500).json({ error: 'No se pudo crear el servicio' });
+  }
+});
+
+// 9. Eliminar Servicio
+app.delete('/services/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    // Primero borramos citas de este servicio para evitar errores
+    await prisma.appointment.deleteMany({ where: { serviceId: Number(id) } });
+    // Luego borramos el servicio
+    await prisma.service.delete({ where: { id: Number(id) } });
+    res.json({ message: 'Servicio eliminado' });
+  } catch (error) {
+    res.status(500).json({ error: 'No se pudo eliminar servicio' });
+  }
+});
 app.listen(PORT, () => {
   console.log(`🚀 SERVIDOR LISTO en http://localhost:${PORT}`);
 });// despertando al servidor
