@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import './App.css'
 
-function App() {const [newBarberName, setNewBarberName] = useState('')
+function App() {
+  const [newBarberName, setNewBarberName] = useState('')
   const [view, setView] = useState('cliente')
   const [barbers, setBarbers] = useState([])
   const [services, setServices] = useState([])
@@ -13,7 +14,7 @@ function App() {const [newBarberName, setNewBarberName] = useState('')
   const [phone, setPhone] = useState('')
 
   // ☁️ 1. URL DEL SERVIDOR (EN LA NUBE)
-const API_URL = 'https://barberia-cerebro.onrender.com'
+  const API_URL = 'https://barberia-cerebro.onrender.com'
 
   useEffect(() => {
     fetch(`${API_URL}/barbers`).then(r => r.json()).then(setBarbers)
@@ -49,14 +50,16 @@ const API_URL = 'https://barberia-cerebro.onrender.com'
     } catch (error) { alert("❌ Error de conexión") }
   }
 
-  // 🗑️ 2. FUNCIÓN PARA BORRAR
+  // 🗑️ 2. FUNCIÓN PARA BORRAR CITA
   const handleDelete = async (id: any) => {
     if (!confirm("¿Seguro que quieres eliminar esta cita?")) return;
     try {
       await fetch(`${API_URL}/appointments/${id}`, { method: 'DELETE' });
       refreshAppointments(); 
     } catch (error) { alert("Error al borrar"); }
-  }// FUNCIÓN PARA CONTRATAR
+  }
+
+  // 👔 3. FUNCIÓN PARA CONTRATAR
   const hireBarber = async () => {
     if (!newBarberName) return alert('Escribe un nombre')
     await fetch(`${API_URL}/barbers`, {
@@ -69,17 +72,17 @@ const API_URL = 'https://barberia-cerebro.onrender.com'
     window.location.reload()
   }
 
-  // FUNCIÓN PARA DESPEDIR
+  // 🔥 4. FUNCIÓN PARA DESPEDIR
   const fireBarber = async (id: any) => {
     if (!confirm('¿Seguro que quieres despedir a este barbero?')) return
     await fetch(`${API_URL}/barbers/${id}`, { method: 'DELETE' })
     window.location.reload()
   }
 
-  // 🔒 3. SEGURIDAD PARA ENTRAR A ADMIN
+  // 🔒 5. SEGURIDAD PARA ENTRAR A ADMIN
   const handleAdminEnter = () => {
     const password = prompt("🔒 Área restringida. Ingresa la contraseña:");
-    if (password === "1234") { // <--- AQUÍ CAMBIAS LA CLAVE
+    if (password === "1234") { 
       setView('admin');
     } else {
       alert("⛔ Contraseña incorrecta");
@@ -108,7 +111,6 @@ const API_URL = 'https://barberia-cerebro.onrender.com'
 
       <div style={styles.nav}>
         <button onClick={() => setView('cliente')} style={styles.btn(view === 'cliente')}>🧔 CLIENTE</button>
-        {/* BOTÓN CON CANDADO */}
         <button onClick={handleAdminEnter} style={styles.btn(view === 'admin')}>🛡️ ADMIN</button>
       </div>
 
@@ -137,55 +139,59 @@ const API_URL = 'https://barberia-cerebro.onrender.com'
           <button onClick={handleBooking} style={styles.actionBtn}>🔥 CONFIRMAR CITA</button>
         </div>
       ) : (
-        <div style={{ ...styles.card, maxWidth: '900px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-            <h2 style={{ margin: 0 }}>Agenda en Vivo</h2>
-            <button onClick={refreshAppointments} style={{ background: '#333', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '10px', cursor: 'pointer' }}>🔄 Refrescar</button>
+        /* 🛡️ VISTA DE ADMIN (INICIO DEL FRAGMENTO) */
+        <> 
+          {/* TARJETA 1: AGENDA */}
+          <div style={{ ...styles.card, maxWidth: '900px', marginBottom: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+              <h2 style={{ margin: 0 }}>Agenda en Vivo</h2>
+              <button onClick={refreshAppointments} style={{ background: '#333', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '10px', cursor: 'pointer' }}>🔄 Refrescar</button>
+            </div>
+
+            <table style={styles.table}>
+              <thead>
+                <tr>
+                  <th style={styles.th}>HORA</th>
+                  <th style={styles.th}>CLIENTE</th>
+                  <th style={styles.th}>BARBERO</th>
+                  <th style={styles.th}>SERVICIO</th>
+                  <th style={styles.th}>PRECIO</th>
+                  <th style={styles.th}>BORRAR</th>
+                </tr>
+              </thead>
+              <tbody>
+                {appointments.map((cita: any) => (
+                  <tr key={cita.id}>
+                    <td style={{ ...styles.td, color: '#888' }}>
+                      {new Date(cita.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </td>
+                    <td style={{ ...styles.td, fontWeight: 'bold' }}>{cita.clientName}</td>
+                    <td style={styles.td}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: '#333', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✂️</div>
+                        {cita.barber ? cita.barber.name : '...'}
+                      </div>
+                    </td>
+                    <td style={styles.td}>{cita.service ? cita.service.name : '...'}</td>
+                    <td style={styles.td}><span style={styles.badge}>${cita.service ? cita.service.price : '0'}</span></td>
+                    
+                    <td style={styles.td}>
+                      <button 
+                        onClick={() => handleDelete(cita.id)} 
+                        style={{background: '#ff4444', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold'}}
+                      >
+                        🗑️
+                      </button>
+                    </td>
+
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {appointments.length === 0 && <p style={{ textAlign: 'center', color: '#555', marginTop: '30px' }}>No hay citas hoy. A descansar. 😴</p>}
           </div>
 
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th style={styles.th}>HORA</th>
-                <th style={styles.th}>CLIENTE</th>
-                <th style={styles.th}>BARBERO</th>
-                <th style={styles.th}>SERVICIO</th>
-                <th style={styles.th}>PRECIO</th>
-                <th style={styles.th}>BORRAR</th>
-              </tr>
-            </thead>
-            <tbody>
-              {appointments.map((cita: any) => (
-                <tr key={cita.id}>
-                  <td style={{ ...styles.td, color: '#888' }}>
-                    {new Date(cita.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </td>
-                  <td style={{ ...styles.td, fontWeight: 'bold' }}>{cita.clientName}</td>
-                  <td style={styles.td}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: '#333', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✂️</div>
-                      {cita.barber ? cita.barber.name : '...'}
-                    </div>
-                  </td>
-                  <td style={styles.td}>{cita.service ? cita.service.name : '...'}</td>
-                  <td style={styles.td}><span style={styles.badge}>${cita.service ? cita.service.price : '0'}</span></td>
-                  
-                  <td style={styles.td}>
-                    <button 
-                      onClick={() => handleDelete(cita.id)} 
-                      style={{background: '#ff4444', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold'}}
-                    >
-                      🗑️
-                    </button>
-                  </td>
-
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {appointments.length === 0 && <p style={{ textAlign: 'center', color: '#555', marginTop: '30px' }}>No hay citas hoy. A descansar. 😴</p>}
-        </div>
-   {/* PANEL DE GESTIÓN DE EQUIPO */}
+          {/* TARJETA 2: GESTIÓN DE EQUIPO */}
           <div style={styles.card}>
             <h2>Gestión de Equipo 💈</h2>
             <div style={{display: 'flex', gap: '10px', marginBottom: '20px'}}>
@@ -195,21 +201,29 @@ const API_URL = 'https://barberia-cerebro.onrender.com'
                 value={newBarberName}
                 onChange={(e) => setNewBarberName(e.target.value)}
               />
-              <button style={styles.button} onClick={hireBarber}>AGREGAR</button>
+              <button 
+                style={{padding: '10px', background: '#2196F3', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold'}} 
+                onClick={hireBarber}
+              >
+                AGREGAR
+              </button>
             </div>
 
             {barbers.map((b: any) => (
-              <div key={b.id} style={{display: 'flex', justifyContent: 'space-between', padding: '10px', borderBottom: '1px solid #444'}}>
-                <span style={{color: 'white'}}>{b.name}</span>
+              <div key={b.id} style={{display: 'flex', justifyContent: 'space-between', padding: '10px', borderBottom: '1px solid #444', alignItems: 'center'}}>
+                <span style={{color: 'white', fontWeight: 'bold'}}>{b.name}</span>
                 <button 
                   onClick={() => fireBarber(b.id)}
-                  style={{background: 'red', border: 'none', borderRadius: '5px', cursor: 'pointer'}}
+                  style={{background: '#D32F2F', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer'}}
                 >
-                  🗑️
+                  DESPEDIR 🗑️
                 </button>
               </div>
             ))}
-          </div>   )}
+          </div> 
+        </> 
+        /* 🏁 FIN DEL FRAGMENTO */
+      )}
     </div>
   )
 }
