@@ -10,13 +10,11 @@ async function main() {
   await prisma.service.deleteMany()
 
   // 2. Creamos los SERVICIOS (Cortes)
+// 2. Crear Servicios (Menú nuevo con tiempos diferentes)
   const services = [
-    { name: "Corte Caballero", duration: 30, price: 30 },
-    { name: "Barba", duration: 30, price: 20 },
-    { name: "Corte + Barba", duration: 60, price: 45 },
-    { name: "Corte Niño", duration: 30, price: 25 },
+    { name: 'Corte Rápido (30 min)', price: 25, duration: 30 },
+    { name: 'Corte VIP (1 hora)', price: 50, duration: 60 },
   ]
-
   for (const s of services) {
     await prisma.service.create({ data: s })
   }
