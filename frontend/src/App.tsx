@@ -2,23 +2,40 @@ import { useEffect, useState } from 'react'
 import './App.css'
 
 function App() {
+  // --- ESTADOS (MEMORIA) ---
   const [newBarberName, setNewBarberName] = useState('')
   const [newServiceName, setNewServiceName] = useState('')
   const [newServicePrice, setNewServicePrice] = useState('')
   const [view, setView] = useState('cliente')
-const [barbers, setBarbers] = useState<any[]>([])
-const [services, setServices] = useState<any[]>([])
-const [appointments, setAppointments] = useState<any[]>([])
-  // DATOS DEL FORMULARIO
+  
+  // AQUÍ ESTÁ EL ARREGLO DE TIPOS (any[]) PARA QUE NO DE ERROR ROJO
+  const [barbers, setBarbers] = useState<any[]>([])
+  const [services, setServices] = useState<any[]>([])
+  const [appointments, setAppointments] = useState<any[]>([])
+
+  // DATOS DEL FORMULARIO DE RESERVA
   const [selectedBarber, setSelectedBarber] = useState('')
   const [selectedService, setSelectedService] = useState('')
+  
+  // AQUÍ ESTÁN LAS VARIABLES NUEVAS PARA SEPARAR FECHA Y HORA
   const [selectedDate, setSelectedDate] = useState('') 
+  const [selectedTime, setSelectedTime] = useState('') 
+  
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
 
   // ☁️ URL DEL SERVIDOR
   const API_URL = 'https://barberia-cerebro.onrender.com'
 
+  // ⏰ LISTA DE HORAS FIJAS (BLOQUES)
+  const timeSlots = [
+    "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
+    "12:00", "12:30", "13:00", "13:30", "14:00", "14:30",
+    "15:00", "15:30", "16:00", "16:30", "17:00", "17:30", 
+    "18:00", "18:30"
+  ]
+
+  // CARGAR DATOS AL INICIO
   useEffect(() => {
     fetch(`${API_URL}/barbers`)
       .then(r => r.json())
@@ -40,12 +57,17 @@ const [appointments, setAppointments] = useState<any[]>([])
       .catch(e => console.error("Error citas:", e))
   }
 
+  // --- FUNCIÓN PARA RESERVAR (LOGICA NUEVA) ---
   const handleBooking = async () => {
-    if (!selectedBarber || !selectedService || !name || !selectedDate) {
-      alert("⚠️ Faltan datos (Elige barbero, servicio, fecha y pon tu nombre)")
+    // Validamos que haya elegido FECHA y HORA por separado
+    if (!selectedBarber || !selectedService || !name || !selectedDate || !selectedTime) {
+      alert("⚠️ Faltan datos: Elige barbero, servicio, fecha, hora y tu nombre.")
       return
     }
     
+    // UNIMOS FECHA Y HORA (Ej: "2026-02-01" + "T" + "09:30" + ":00")
+    const finalDate = new Date(`${selectedDate}T${selectedTime}:00`)
+
     try {
       const response = await fetch(`${API_URL}/appointments`, {
         method: 'POST',
@@ -55,23 +77,24 @@ const [appointments, setAppointments] = useState<any[]>([])
           serviceId: selectedService,
           clientName: name,
           clientPhone: phone,
-          date: selectedDate
+          date: finalDate // Enviamos la fecha combinada
         })
       })
 
       const data = await response.json()
 
       if (response.ok) {
-        alert(`✅ ¡Cita Agendada!`)
+        alert(`✅ ¡Cita Agendada para el ${selectedDate} a las ${selectedTime}!`)
         refreshAppointments()
-        setName(''); setPhone(''); setSelectedDate('')
+        // Limpiamos el formulario
+        setName(''); setPhone(''); setSelectedDate(''); setSelectedTime('')
       } else { 
         alert(`❌ Error: ${data.error}`) 
       }
     } catch (error) { alert("❌ Error de conexión") }
   }
 
-  // --- FUNCIONES DE ADMIN ---
+  // --- FUNCIONES DE ADMIN (ACTUALIZACIÓN SILENCIOSA) ---
 
   const handleDelete = async (id: any) => {
     if (!confirm("¿Borrar cita?")) return;
@@ -87,6 +110,7 @@ const [appointments, setAppointments] = useState<any[]>([])
       body: JSON.stringify({ name: newBarberName })
     })
     setNewBarberName('')
+    // Actualiza sin recargar la pagina
     fetch(`${API_URL}/barbers`).then(r => r.json()).then(setBarbers)
   }
 
@@ -158,13 +182,25 @@ const [appointments, setAppointments] = useState<any[]>([])
             {services.map((s: any) => <option key={s.id} value={s.id}>{s.name} - ${s.price}</option>)}
           </select>
 
-          <label style={styles.label}>FECHA Y HORA</label>
+          {/* --- AQUÍ ESTÁ EL CAMBIO VISUAL (CALENDARIO + HORA) --- */}
+          
+          <label style={styles.label}>FECHA DEL CORTE</label>
           <input 
-            type="datetime-local" 
+            type="date" 
             style={styles.input} 
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
           />
+
+          <label style={styles.label}>HORA EXACTA</label>
+          <select style={styles.input} onChange={(e) => setSelectedTime(e.target.value)} value={selectedTime}>
+              <option value="">Selecciona una hora...</option>
+              {timeSlots.map(time => (
+                <option key={time} value={time}>{time}</option>
+              ))}
+          </select>
+
+          {/* --------------------------------------------------- */}
 
           <label style={styles.label}>TU NOMBRE</label>
           <input type="text" placeholder="Nombre" value={name} onChange={e => setName(e.target.value)} style={styles.input} />
@@ -209,31 +245,3 @@ const [appointments, setAppointments] = useState<any[]>([])
               <button style={styles.button} onClick={hireBarber}>➕</button>
             </div>
             {barbers.map((b: any) => (
-              <div key={b.id} style={styles.row}>
-                <span>{b.name}</span>
-                <button onClick={() => fireBarber(b.id)} style={{background:'#D32F2F', color:'white', border:'none', borderRadius:'5px'}}>🗑️</button>
-              </div>
-            ))}
-          </div>
-          
-          <div style={styles.card}>
-            <h3>💰 Precios</h3>
-            <div style={{display: 'flex', gap: '5px', marginBottom: '10px'}}>
-              <input style={styles.input} placeholder="Servicio" value={newServiceName} onChange={(e) => setNewServiceName(e.target.value)} />
-              <input style={{...styles.input, width:'80px'}} placeholder="$" type="number" value={newServicePrice} onChange={(e) => setNewServicePrice(e.target.value)} />
-              <button style={styles.button} onClick={createService}>➕</button>
-            </div>
-            {services.map((s: any) => (
-              <div key={s.id} style={styles.row}>
-                <span>{s.name} - ${s.price}</span>
-                <button onClick={() => deleteService(s.id)} style={{background:'#D32F2F', color:'white', border:'none', borderRadius:'5px'}}>🗑️</button>
-              </div>
-            ))}
-          </div>
-        </> 
-      )}
-    </div>
-  )
-}
-
-export default App
