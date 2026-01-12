@@ -69,14 +69,14 @@ function App() {
     })
     setNewBarberName('')
     // Recargamos la página para ver el cambio
-    window.location.reload()
+    fetch(`${API_URL}/barbers`).then(r => r.json()).then(setBarbers)
   }
 
   // 🔥 4. FUNCIÓN PARA DESPEDIR
   const fireBarber = async (id: any) => {
     if (!confirm('¿Seguro que quieres despedir a este barbero?')) return
     await fetch(`${API_URL}/barbers/${id}`, { method: 'DELETE' })
-    window.location.reload()
+    fetch(`${API_URL}/barbers`).then(r => r.json()).then(setBarbers)
   }
 
   // 🔒 5. SEGURIDAD PARA ENTRAR A ADMIN
