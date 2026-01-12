@@ -178,6 +178,7 @@ function App() {
                <label style={styles.label}>DÍA</label>
                <input 
                  type="date" 
+                 min={new Date().toISOString().split('T')[0]}
                  style={styles.input}
                  onChange={e => setSelectedDate(e.target.value)}
                />
