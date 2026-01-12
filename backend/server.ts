@@ -67,6 +67,31 @@ app.delete('/appointments/:id', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: 'No se pudo borrar' });
   }
+});// 6. Contratar Barbero (NUEVO)
+app.post('/barbers', async (req, res) => {
+  try {
+    const { name } = req.body;
+    const newBarber = await prisma.barber.create({
+      data: { name, isActive: true }
+    });
+    res.json(newBarber);
+  } catch (error) {
+    res.status(500).json({ error: 'No se pudo crear el barbero' });
+  }
+});
+
+// 7. Despedir Barbero (NUEVO)
+app.delete('/barbers/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    // Primero borramos sus citas para que no de error
+    await prisma.appointment.deleteMany({ where: { barberId: Number(id) } });
+    // Luego borramos al barbero
+    await prisma.barber.delete({ where: { id: Number(id) } });
+    res.json({ message: 'Barbero eliminado' });
+  } catch (error) {
+    res.status(500).json({ error: 'No se pudo eliminar' });
+  }
 });
 app.listen(PORT, () => {
   console.log(`🚀 SERVIDOR LISTO en http://localhost:${PORT}`);
