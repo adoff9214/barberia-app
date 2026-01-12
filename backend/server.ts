@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 const app = express();
 const PORT = 3000;
 
-// Middleware (El pase VIP para que el celular entre)
+// Middleware
 app.use(cors());
 app.use(express.json());
 
@@ -22,15 +22,41 @@ app.get('/services', async (req, res) => {
   res.json(services);
 });
 
-// 3. Agendar Cita
+// 3. Agendar Cita (CON HORARIO INTELIGENTE 🧠⏰)
 app.post('/appointments', async (req, res) => {
   try {
     const { barberId, serviceId, clientName, clientPhone, date } = req.body;
     
-    // Si envían fecha la usamos, si no, usamos "ahora"
+    // --- 🛑 EL PORTERO: Validar Horario ---
+    if (date) {
+      const fechaCita = new Date(date);
+      const dia = fechaCita.getDay(); // 0 = Domingo, 1 = Lunes... 6 = Sábado
+      const hora = fechaCita.getHours();
+
+      // REGLA 1: Domingo Cerrado
+      if (dia === 0) {
+        return res.status(400).json({ error: '🚫 Lo sentimos, los Domingos estamos cerrados.' });
+      }
+
+      // REGLA 2: Sábados (9am - 5pm)
+      if (dia === 6) {
+        if (hora < 9 || hora >= 17) { // 17 es las 5 PM
+           return res.status(400).json({ error: '🚫 El horario de Sábado es de 9am a 5pm.' });
+        }
+      }
+
+      // REGLA 3: Lunes a Viernes (9am - 7pm)
+      if (dia >= 1 && dia <= 5) {
+        if (hora < 9 || hora >= 19) { // 19 es las 7 PM
+           return res.status(400).json({ error: '🚫 Entre semana abrimos de 9am a 7pm.' });
+        }
+      }
+    }
+    // ----------------------------------------------------
+
+    // Configurar fechas
     const fechaInicio = date ? new Date(date) : new Date();
-    // Duración automática de 30 mins
-    const fechaFin = new Date(fechaInicio.getTime() + 30 * 60000);
+    const fechaFin = new Date(fechaInicio.getTime() + 30 * 60000); // 30 min por defecto
 
     const newAppointment = await prisma.appointment.create({
       data: {
@@ -43,6 +69,7 @@ app.post('/appointments', async (req, res) => {
       } as any
     });
     res.json(newAppointment);
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al crear la cita' });
@@ -62,29 +89,25 @@ app.get('/appointments', async (req, res) => {
 app.delete('/appointments/:id', async (req, res) => {
   const { id } = req.params;
   try {
-    await prisma.appointment.delete({
-      where: { id: Number(id) }
-    });
+    await prisma.appointment.delete({ where: { id: Number(id) } });
     res.json({ message: 'Cita eliminada' });
   } catch (error) {
     res.status(500).json({ error: 'No se pudo borrar' });
   }
 });
 
-// 6. Contratar Barbero (NUEVO)
+// 6. Contratar Barbero
 app.post('/barbers', async (req, res) => {
   try {
     const { name } = req.body;
-    const newBarber = await prisma.barber.create({
-      data: { name, isActive: true }
-    });
+    const newBarber = await prisma.barber.create({ data: { name, isActive: true } });
     res.json(newBarber);
   } catch (error) {
-    res.status(500).json({ error: 'No se pudo crear el barbero' });
+    res.status(500).json({ error: 'Error al crear barbero' });
   }
 });
 
-// 7. Despedir Barbero (NUEVO)
+// 7. Despedir Barbero
 app.delete('/barbers/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -92,11 +115,11 @@ app.delete('/barbers/:id', async (req, res) => {
     await prisma.barber.delete({ where: { id: Number(id) } });
     res.json({ message: 'Barbero eliminado' });
   } catch (error) {
-    res.status(500).json({ error: 'No se pudo eliminar' });
+    res.status(500).json({ error: 'Error al eliminar barbero' });
   }
 });
 
-// 8. Crear Servicio (Gestión Precios)
+// 8. Crear Servicio (Precios)
 app.post('/services', async (req, res) => {
   try {
     const { name, price } = req.body;
@@ -105,7 +128,7 @@ app.post('/services', async (req, res) => {
     });
     res.json(newService);
   } catch (error) {
-    res.status(500).json({ error: 'No se pudo crear el servicio' });
+    res.status(500).json({ error: 'Error al crear servicio' });
   }
 });
 
@@ -117,11 +140,10 @@ app.delete('/services/:id', async (req, res) => {
     await prisma.service.delete({ where: { id: Number(id) } });
     res.json({ message: 'Servicio eliminado' });
   } catch (error) {
-    res.status(500).json({ error: 'No se pudo eliminar servicio' });
+    res.status(500).json({ error: 'Error al eliminar servicio' });
   }
 });
 
-// Arrancar el servidor
 app.listen(PORT, () => {
   console.log(`🚀 SERVIDOR LISTO en http://localhost:${PORT}`);
 });
