@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import './App.css'
 
-function App() {
+function App() {const [newBarberName, setNewBarberName] = useState('')
   const [view, setView] = useState('cliente')
   const [barbers, setBarbers] = useState([])
   const [services, setServices] = useState([])
@@ -56,6 +56,24 @@ const API_URL = 'https://barberia-cerebro.onrender.com'
       await fetch(`${API_URL}/appointments/${id}`, { method: 'DELETE' });
       refreshAppointments(); 
     } catch (error) { alert("Error al borrar"); }
+  }// FUNCIÓN PARA CONTRATAR
+  const hireBarber = async () => {
+    if (!newBarberName) return alert('Escribe un nombre')
+    await fetch(`${API_URL}/barbers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newBarberName })
+    })
+    setNewBarberName('')
+    // Recargamos la página para ver el cambio
+    window.location.reload()
+  }
+
+  // FUNCIÓN PARA DESPEDIR
+  const fireBarber = async (id: any) => {
+    if (!confirm('¿Seguro que quieres despedir a este barbero?')) return
+    await fetch(`${API_URL}/barbers/${id}`, { method: 'DELETE' })
+    window.location.reload()
   }
 
   // 🔒 3. SEGURIDAD PARA ENTRAR A ADMIN
@@ -167,7 +185,31 @@ const API_URL = 'https://barberia-cerebro.onrender.com'
           </table>
           {appointments.length === 0 && <p style={{ textAlign: 'center', color: '#555', marginTop: '30px' }}>No hay citas hoy. A descansar. 😴</p>}
         </div>
-      )}
+   {/* PANEL DE GESTIÓN DE EQUIPO */}
+          <div style={styles.card}>
+            <h2>Gestión de Equipo 💈</h2>
+            <div style={{display: 'flex', gap: '10px', marginBottom: '20px'}}>
+              <input
+                style={styles.input}
+                placeholder="Nuevo Barbero..."
+                value={newBarberName}
+                onChange={(e) => setNewBarberName(e.target.value)}
+              />
+              <button style={styles.button} onClick={hireBarber}>AGREGAR</button>
+            </div>
+
+            {barbers.map((b: any) => (
+              <div key={b.id} style={{display: 'flex', justifyContent: 'space-between', padding: '10px', borderBottom: '1px solid #444'}}>
+                <span style={{color: 'white'}}>{b.name}</span>
+                <button 
+                  onClick={() => fireBarber(b.id)}
+                  style={{background: 'red', border: 'none', borderRadius: '5px', cursor: 'pointer'}}
+                >
+                  🗑️
+                </button>
+              </div>
+            ))}
+          </div>   )}
     </div>
   )
 }
