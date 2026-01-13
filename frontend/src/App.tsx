@@ -3,11 +3,12 @@ import './App.css'
 
 function App() {
   // --- ESTADOS (MEMORIA) ---
+  // Tipos any[] para evitar errores estrictos de TypeScript
   const [barbers, setBarbers] = useState<any[]>([])
   const [services, setServices] = useState<any[]>([])
   const [appointments, setAppointments] = useState<any[]>([])
 
-  // Datos del formulario
+  // Datos del formulario de Cliente
   const [selectedBarber, setSelectedBarber] = useState('')
   const [selectedService, setSelectedService] = useState('')
   const [selectedDate, setSelectedDate] = useState('') 
@@ -15,14 +16,18 @@ function App() {
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
 
-  // Datos para gestión de admin
+  // Datos para gestión de Admin
   const [view, setView] = useState('cliente') // 'cliente' o 'admin'
   const [newBarberName, setNewBarberName] = useState('')
+  
+  // NUEVO: Variables para crear servicios/precios
+  const [newServiceName, setNewServiceName] = useState('')
+  const [newServicePrice, setNewServicePrice] = useState('')
 
   // ☁️ URL DEL SERVIDOR (EN LA NUBE)
   const API_URL = 'https://barberia-cerebro.onrender.com'
 
-  // LISTA DE HORAS (El sistema usa 24h internamente, pero abajo lo convertimos a AM/PM visualmente)
+  // LISTA DE HORAS
   const timeSlots = [
     "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
     "12:00", "12:30", "13:00", "13:30", "14:00", "14:30",
@@ -37,7 +42,7 @@ function App() {
     refreshAppointments()
   }, [])
 
-  // FUNCIONES PARA LEER DATOS
+  // --- FUNCIONES DE LECTURA ---
   const fetchBarbers = () => {
     fetch(`${API_URL}/barbers`).then(r => r.json()).then(setBarbers)
   }
@@ -57,7 +62,6 @@ function App() {
       return
     }
 
-    // Combinar fecha y hora
     const finalDate = new Date(`${selectedDate}T${selectedTime}`)
 
     try {
@@ -87,14 +91,16 @@ function App() {
     }
   }
 
-  // --- FUNCIONES DE ADMIN ---
+  // --- FUNCIONES DE ADMIN (JEFE) ---
 
+  // 1. Borrar Cita
   const handleDelete = async (id: any) => {
     if (!confirm('¿Borrar esta cita?')) return
     await fetch(`${API_URL}/appointments/${id}`, { method: 'DELETE' })
     refreshAppointments()
   }
 
+  // 2. Contratar Barbero
   const hireBarber = async () => {
     if (!newBarberName) return alert('Escribe un nombre')
     await fetch(`${API_URL}/barbers`, {
@@ -103,13 +109,39 @@ function App() {
       body: JSON.stringify({ name: newBarberName })
     })
     setNewBarberName('')
+    // Actualización silenciosa (sin recargar página)
     fetchBarbers() 
   }
 
+  // 3. Despedir Barbero
   const fireBarber = async (id: any) => {
-    if (!confirm('¿Seguro que quieres despedir a este barbero?')) return
+    if (!confirm('¿Seguro que quieres despedir a este barbero? Se borrarán sus citas.')) return
     await fetch(`${API_URL}/barbers/${id}`, { method: 'DELETE' })
     fetchBarbers() 
+  }
+
+  // 4. Crear Nuevo Servicio (Corte/Precio) - ¡NUEVO!
+  const addService = async () => {
+    if (!newServiceName || !newServicePrice) return alert('Faltan datos del servicio')
+    await fetch(`${API_URL}/services`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        name: newServiceName, 
+        price: newServicePrice,
+        duration: 30 // Por defecto 30 min (puedes cambiarlo si quieres)
+      })
+    })
+    setNewServiceName('')
+    setNewServicePrice('')
+    fetchServices()
+  }
+
+  // 5. Borrar Servicio - ¡NUEVO!
+  const deleteService = async (id: any) => {
+    if (!confirm('¿Borrar este servicio del menú?')) return
+    await fetch(`${API_URL}/services/${id}`, { method: 'DELETE' })
+    fetchServices()
   }
 
   // --- PARTE VISUAL (HTML) ---
@@ -131,7 +163,7 @@ function App() {
           <button 
             onClick={() => {
               const pass = prompt('Contraseña de Admin:')
-              if (pass === 'admin123') setView('admin')
+              if (pass === '2604') setView('admin') // AQUÍ ESTÁ TU CONTRASEÑA
               else alert('Contraseña incorrecta')
             }}
             style={view === 'admin' ? styles.activeTab : styles.tab}
@@ -191,13 +223,12 @@ function App() {
                >
                  <option value="">Selecciona hora...</option>
                  {timeSlots.map(time => {
-                   // CONVERTIDOR A 12 HORAS (AM/PM) SOLO PARA VISUALIZAR
+                   // CONVERTIDOR VISUAL A AM/PM
                    const [h, m] = time.split(':')
                    const hour = parseInt(h)
                    const ampm = hour >= 12 ? 'PM' : 'AM'
                    const hour12 = hour % 12 || 12
                    const displayTime = `${hour12}:${m} ${ampm}`
-                   
                    return (
                      <option key={time} value={time}>{displayTime}</option>
                    )
@@ -240,7 +271,7 @@ function App() {
 
             <div style={{marginTop: '20px'}}>
               <div style={{display: 'flex', padding: '10px', background: '#333', borderRadius: '5px', fontWeight: 'bold', fontSize: '0.9rem'}}>
-                <div style={{flex: 1}}>Fecha/Hora</div>
+                <div style={{flex: 1}}>Hora</div>
                 <div style={{flex: 1}}>Cliente</div>
                 <div style={{flex: 1}}>Barbero</div>
                 <div style={{flex: 1}}>Servicio</div>
@@ -270,11 +301,11 @@ function App() {
 
           {/* TARJETA 2: GESTIÓN DE EQUIPO */}
           <div style={styles.card}>
-            <h2>Gestión de Equipo 💈</h2>
+            <h3>💈 Mi Equipo</h3>
             <div style={{display: 'flex', gap: '10px', marginBottom: '20px'}}>
               <input
                 style={styles.input}
-                placeholder="Nombre del nuevo barbero..."
+                placeholder="Nuevo barbero..."
                 value={newBarberName}
                 onChange={(e) => setNewBarberName(e.target.value)}
               />
@@ -282,17 +313,46 @@ function App() {
             </div>
 
             {barbers.map((b: any) => (
-              <div key={b.id} style={{display: 'flex', justifyContent: 'space-between', padding: '15px', borderBottom: '1px solid #333', alignItems: 'center'}}>
-                <span style={{fontSize: '1.1rem', fontWeight: 'bold'}}>{b.name}</span>
+              <div key={b.id} style={{display: 'flex', justifyContent: 'space-between', padding: '10px', borderBottom: '1px solid #333', alignItems: 'center'}}>
+                <span style={{fontSize: '1rem', fontWeight: 'bold'}}>{b.name}</span>
                 <button 
                   onClick={() => fireBarber(b.id)}
-                  style={{background: '#ff4444', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', padding: '8px 15px'}}
+                  style={{background: '#ff4444', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', padding: '5px 10px'}}
                 >
                   DESPEDIR
                 </button>
               </div>
             ))}
           </div>
+
+          {/* TARJETA 3: GESTIÓN DE PRECIOS (¡NUEVO!) */}
+          <div style={styles.card}>
+            <h3>💰 Mis Servicios y Precios</h3>
+            <div style={{display: 'flex', gap: '10px', marginBottom: '20px'}}>
+              <input 
+                placeholder="Ej: Corte + Barba" 
+                style={styles.input} 
+                value={newServiceName}
+                onChange={e => setNewServiceName(e.target.value)}
+              />
+              <input 
+                placeholder="$$" 
+                type="number"
+                style={{...styles.input, width:'80px'}} 
+                value={newServicePrice}
+                onChange={e => setNewServicePrice(e.target.value)}
+              />
+              <button style={styles.button} onClick={addService}>AGREGAR</button>
+            </div>
+
+            {services.map((s:any) => (
+              <div key={s.id} style={{display:'flex', justifyContent:'space-between', padding:'10px', borderBottom:'1px solid #333'}}>
+                <span style={{color:'white'}}>{s.name} - <span style={{color:'#4CAF50'}}>${s.price}</span></span>
+                <button onClick={() => deleteService(s.id)} style={{background:'red', border:'none', borderRadius:'5px', padding:'5px 10px', cursor:'pointer'}}>BORRAR</button>
+              </div>
+            ))}
+          </div>
+
         </>
       )}
 
