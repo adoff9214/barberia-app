@@ -16,17 +16,16 @@ function App() {
   const [phone, setPhone] = useState('')
 
   // Datos para gestión de Admin
-  const [view, setView] = useState('cliente') // 'cliente' o 'admin'
+  const [view, setView] = useState('cliente')
   const [newBarberName, setNewBarberName] = useState('')
   
-  // Variables para crear servicios/precios
+  // Variables para crear servicios
   const [newServiceName, setNewServiceName] = useState('')
   const [newServicePrice, setNewServicePrice] = useState('')
+  const [newServiceDuration, setNewServiceDuration] = useState('30') // ⏱️ NUEVO
 
-  // ☁️ URL DEL SERVIDOR (EN LA NUBE)
   const API_URL = 'https://barberia-cerebro.onrender.com'
 
-  // LISTA DE HORAS
   const timeSlots = [
     "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
     "12:00", "12:30", "13:00", "13:30", "14:00", "14:30",
@@ -34,62 +33,35 @@ function App() {
     "18:00", "18:30"
   ]
 
-  // AL CARGAR LA PÁGINA
   useEffect(() => {
     fetchBarbers()
     fetchServices()
     refreshAppointments()
   }, [])
 
-  // --- FUNCIONES DE LECTURA ---
-  const fetchBarbers = () => {
-    fetch(`${API_URL}/barbers`).then(r => r.json()).then(setBarbers)
-  }
-  
-  const fetchServices = () => {
-    fetch(`${API_URL}/services`).then(r => r.json()).then(setServices)
-  }
+  const fetchBarbers = () => fetch(`${API_URL}/barbers`).then(r => r.json()).then(setBarbers)
+  const fetchServices = () => fetch(`${API_URL}/services`).then(r => r.json()).then(setServices)
+  const refreshAppointments = () => fetch(`${API_URL}/appointments`).then(r => r.json()).then(setAppointments)
 
-  const refreshAppointments = () => {
-    fetch(`${API_URL}/appointments`).then(r => r.json()).then(setAppointments)
-  }
-
-  // --- 🕵️‍♂️ FUNCIÓN NUEVA: ¿ESTÁ LIBRE ESTA HORA? ---
+  // VERIFICAR DISPONIBILIDAD (Bloqueo Visual)
   const checkAvailability = (time: string) => {
-    // Si no han elegido barbero o fecha, mostramos todo disponible
     if (!selectedBarber || !selectedDate) return true;
-
-    // Calculamos la fecha/hora exacta de este slot
     const slotDate = new Date(`${selectedDate}T${time}`);
-
-    // Buscamos si hay ALGUNA cita que choque
     const isBusy = appointments.some(appt => {
-      // 1. ¿Es el mismo barbero?
-      // (Usamos '==' para que no importe si uno es texto y otro número)
       if (appt.barberId != selectedBarber) return false;
-
-      // 2. Traemos las fechas de la cita existente
       const start = new Date(appt.date);
       const end = new Date(appt.endDate);
-
-      // 3. ¿El slot cae dentro de esa cita?
-      // (Si el slot es >= Inicio Y el slot es < Fin)
       return slotDate >= start && slotDate < end;
     });
-
-    // Si está ocupado (isBusy es true), devolvemos FALSE (no disponible)
     return !isBusy;
   }
 
-  // --- FUNCIONES DE CLIENTE (RESERVAR) ---
   const handleBooking = async () => {
     if (!selectedBarber || !selectedService || !selectedDate || !selectedTime || !name) {
       alert("⚠️ Faltan datos (Elige barbero, servicio, día, hora y tu nombre)")
       return
     }
-
     const finalDate = new Date(`${selectedDate}T${selectedTime}`)
-
     try {
       const response = await fetch(`${API_URL}/appointments`, {
         method: 'POST',
@@ -102,9 +74,7 @@ function App() {
           date: finalDate 
         }),
       })
-
       const data = await response.json() 
-
       if (response.ok) {
         alert("✅ ¡Cita reservada con éxito!")
         setName('')
@@ -119,7 +89,7 @@ function App() {
     }
   }
 
-  // --- FUNCIONES DE ADMIN (JEFE) ---
+  // --- FUNCIONES DE ADMIN ---
   const handleDelete = async (id: any) => {
     if (!confirm('¿Borrar esta cita?')) return
     await fetch(`${API_URL}/appointments/${id}`, { method: 'DELETE' })
@@ -138,34 +108,36 @@ function App() {
   }
 
   const fireBarber = async (id: any) => {
-    if (!confirm('¿Seguro que quieres despedir a este barbero? Se borrarán sus citas.')) return
+    if (!confirm('¿Seguro?')) return
     await fetch(`${API_URL}/barbers/${id}`, { method: 'DELETE' })
     fetchBarbers() 
   }
 
+  // AGREGAR SERVICIO CON TIEMPO
   const addService = async () => {
-    if (!newServiceName || !newServicePrice) return alert('Faltan datos del servicio')
+    if (!newServiceName || !newServicePrice) return alert('Faltan datos')
     await fetch(`${API_URL}/services`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         name: newServiceName, 
         price: newServicePrice,
-        duration: 30 
+        duration: Number(newServiceDuration) 
       })
     })
     setNewServiceName('')
     setNewServicePrice('')
+    setNewServiceDuration('30') 
     fetchServices()
   }
 
   const deleteService = async (id: any) => {
-    if (!confirm('¿Borrar este servicio del menú?')) return
+    if (!confirm('¿Borrar servicio?')) return
     await fetch(`${API_URL}/services/${id}`, { method: 'DELETE' })
     fetchServices()
   }
 
-  // --- PARTE VISUAL (HTML) ---
+  // --- HTML ---
   return (
     <div style={styles.container}>
       
@@ -175,12 +147,7 @@ function App() {
         <p style={{color: '#888'}}>Sistema de Gestión Premium</p>
         
         <div style={{background: '#222', display: 'inline-flex', borderRadius: '20px', padding: '5px', marginTop: '10px'}}>
-          <button 
-            onClick={() => setView('cliente')}
-            style={view === 'cliente' ? styles.activeTab : styles.tab}
-          >
-            🧔 CLIENTE
-          </button>
+          <button onClick={() => setView('cliente')} style={view === 'cliente' ? styles.activeTab : styles.tab}>🧔 CLIENTE</button>
           <button 
             onClick={() => {
               const pass = prompt('Contraseña de Admin:')
@@ -188,80 +155,46 @@ function App() {
               else alert('Contraseña incorrecta')
             }}
             style={view === 'admin' ? styles.activeTab : styles.tab}
-          >
-            🛡️ ADMIN
-          </button>
+          >🛡️ ADMIN</button>
         </div>
       </div>
 
-      {/* --- VISTA DE CLIENTE --- */}
+      {/* VISTA CLIENTE */}
       {view === 'cliente' && (
         <div style={styles.card}>
           <h2>Nueva Reserva</h2>
-
           <label style={styles.label}>BARBERO</label>
-          <select 
-            style={styles.select} 
-            onChange={e => setSelectedBarber(e.target.value)}
-            value={selectedBarber}
-          >
+          <select style={styles.select} onChange={e => setSelectedBarber(e.target.value)} value={selectedBarber}>
             <option value="">Selecciona un experto...</option>
-            {barbers.map((b: any) => (
-              <option key={b.id} value={b.id}>{b.name}</option>
-            ))}
+            {barbers.map((b: any) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
 
           <label style={styles.label}>SERVICIO</label>
-          <select 
-            style={styles.select} 
-            onChange={e => setSelectedService(e.target.value)}
-            value={selectedService}
-          >
+          <select style={styles.select} onChange={e => setSelectedService(e.target.value)} value={selectedService}>
             <option value="">Selecciona el corte...</option>
             {services.map((s: any) => (
-              <option key={s.id} value={s.id}>
-                {s.name} - ${s.price} ({s.duration} min)
-              </option>
+              <option key={s.id} value={s.id}>{s.name} - ${s.price} ({s.duration} min)</option>
             ))}
           </select>
 
-          {/* DÍA Y HORA */}
           <div style={{display: 'flex', gap: '10px'}}>
             <div style={{flex: 1}}>
                <label style={styles.label}>DÍA</label>
-               <input 
-                 type="date"
-                 min={new Date().toISOString().split('T')[0]} 
-                 style={styles.input}
-                 onChange={e => setSelectedDate(e.target.value)}
-               />
+               <input type="date" min={new Date().toISOString().split('T')[0]} style={styles.input} onChange={e => setSelectedDate(e.target.value)} />
             </div>
             <div style={{flex: 1}}>
                <label style={styles.label}>HORA</label>
-               <select 
-                 style={styles.select}
-                 onChange={e => setSelectedTime(e.target.value)}
-               >
+               <select style={styles.select} onChange={e => setSelectedTime(e.target.value)}>
                  <option value="">Selecciona hora...</option>
                  {timeSlots.map(time => {
-                   // 1. REVISAMOS SI ESTÁ DISPONIBLE
                    const isAvailable = checkAvailability(time);
-                   
-                   // 2. FORMATEAMOS LA HORA (AM/PM)
                    const [h, m] = time.split(':')
                    const hour = parseInt(h)
                    const ampm = hour >= 12 ? 'PM' : 'AM'
                    const hour12 = hour % 12 || 12
                    const displayTime = `${hour12}:${m} ${ampm}`
-
-                   // 3. MOSTRAMOS LA OPCIÓN (Activada o Desactivada)
                    return (
-                     <option 
-                       key={time} 
-                       value={time} 
-                       disabled={!isAvailable} // 🚫 Aquí ocurre la magia del bloqueo
-                       style={!isAvailable ? {color: '#ff4444'} : {}}
-                     >
+                     <option key={time} value={time} disabled={!isAvailable} style={!isAvailable ? {color: '#ff4444'} : {}}>
                        {displayTime} {isAvailable ? '' : '(Ocupado)'}
                      </option>
                    )
@@ -271,124 +204,73 @@ function App() {
           </div>
 
           <label style={styles.label}>TU NOMBRE</label>
-          <input 
-            style={styles.input} 
-            placeholder="Tu nombre completo"
-            value={name}
-            onChange={e => setName(e.target.value)}
-          />
-
+          <input style={styles.input} placeholder="Tu nombre completo" value={name} onChange={e => setName(e.target.value)} />
           <label style={styles.label}>TELÉFONO</label>
-          <input 
-            style={styles.input} 
-            placeholder="(555) 000-0000"
-            value={phone}
-            onChange={e => setPhone(e.target.value)}
-          />
-
-          <button style={styles.mainButton} onClick={handleBooking}>
-            🔥 CONFIRMAR CITA
-          </button>
+          <input style={styles.input} placeholder="(555) 000-0000" value={phone} onChange={e => setPhone(e.target.value)} />
+          <button style={styles.mainButton} onClick={handleBooking}>🔥 CONFIRMAR CITA</button>
         </div>
       )}
 
-      {/* --- VISTA DE ADMIN --- */}
+      {/* VISTA ADMIN */}
       {view === 'admin' && (
         <>
-          {/* TARJETA 1: AGENDA */}
           <div style={styles.card}>
             <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
               <h2>Agenda en Vivo 📅</h2>
               <button onClick={refreshAppointments} style={styles.button}>🔄 Actualizar</button>
             </div>
-
+            {/* Lista de citas */}
             <div style={{marginTop: '20px'}}>
-              <div style={{display: 'flex', padding: '10px', background: '#333', borderRadius: '5px', fontWeight: 'bold', fontSize: '0.9rem'}}>
-                <div style={{flex: 1}}>Hora</div>
-                <div style={{flex: 1}}>Cliente</div>
-                <div style={{flex: 1}}>Barbero</div>
-                <div style={{flex: 1}}>Servicio</div>
-                <div style={{width: '40px'}}></div>
-              </div>
-
-              {appointments.length === 0 && <p style={{textAlign: 'center', color: '#666', marginTop: '20px'}}>No hay citas aún.</p>}
-
               {appointments.map((cita: any) => (
-                <div key={cita.id} style={{display: 'flex', padding: '15px 10px', borderBottom: '1px solid #333', alignItems: 'center', fontSize: '0.9rem'}}>
-                  <div style={{flex: 1}}>
-                    {new Date(cita.date).toLocaleDateString()} <br/>
-                    <span style={{color: '#4CAF50', fontWeight: 'bold'}}>
-                      {new Date(cita.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: true})}
-                    </span>
-                  </div>
-                  <div style={{flex: 1}}>{cita.clientName}</div>
-                  <div style={{flex: 1}}>{cita.barber?.name || 'Desconocido'}</div>
-                  <div style={{flex: 1}}>{cita.service?.name || 'Vario'}</div>
-                  <div style={{width: '40px'}}>
-                    <button onClick={() => handleDelete(cita.id)} style={{background: 'red', border: 'none', cursor: 'pointer', padding: '5px', borderRadius: '4px'}}>🗑️</button>
-                  </div>
+                <div key={cita.id} style={{display: 'flex', padding: '10px', borderBottom: '1px solid #333', alignItems: 'center', justifyContent:'space-between'}}>
+                   <div>
+                      <span style={{color: '#4CAF50', fontWeight: 'bold'}}>
+                        {new Date(cita.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: true})}
+                      </span> - {cita.clientName} ({cita.service?.name})
+                   </div>
+                   <button onClick={() => handleDelete(cita.id)} style={{background: 'red', border: 'none', padding: '5px', borderRadius: '4px'}}>🗑️</button>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* TARJETA 2: GESTIÓN DE EQUIPO */}
           <div style={styles.card}>
-            <h3>💈 Mi Equipo</h3>
-            <div style={{display: 'flex', gap: '10px', marginBottom: '20px'}}>
-              <input
-                style={styles.input}
-                placeholder="Nuevo barbero..."
-                value={newBarberName}
-                onChange={(e) => setNewBarberName(e.target.value)}
-              />
-              <button style={styles.button} onClick={hireBarber}>CONTRATAR</button>
+            <h3>💰 Servicios y Precios</h3>
+            <div style={{display: 'flex', gap: '5px', marginBottom: '10px'}}>
+              <input placeholder="Corte..." style={{...styles.input, flex: 2}} value={newServiceName} onChange={e => setNewServiceName(e.target.value)}/>
+              <input placeholder="$$" type="number" style={{...styles.input, width: '50px'}} value={newServicePrice} onChange={e => setNewServicePrice(e.target.value)}/>
+              {/* SELECTOR DE TIEMPO */}
+              <select style={{...styles.select, width: '70px'}} value={newServiceDuration} onChange={e => setNewServiceDuration(e.target.value)}>
+                <option value="15">15m</option>
+                <option value="30">30m</option>
+                <option value="45">45m</option>
+                <option value="60">1h</option>
+              </select>
+              <button style={styles.button} onClick={addService}>➕</button>
             </div>
-
-            {barbers.map((b: any) => (
-              <div key={b.id} style={{display: 'flex', justifyContent: 'space-between', padding: '10px', borderBottom: '1px solid #333', alignItems: 'center'}}>
-                <span style={{fontSize: '1rem', fontWeight: 'bold'}}>{b.name}</span>
-                <button 
-                  onClick={() => fireBarber(b.id)}
-                  style={{background: '#ff4444', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', padding: '5px 10px'}}
-                >
-                  DESPEDIR
-                </button>
-              </div>
-            ))}
-          </div>
-
-          {/* TARJETA 3: GESTIÓN DE PRECIOS */}
-          <div style={styles.card}>
-            <h3>💰 Mis Servicios y Precios</h3>
-            <div style={{display: 'flex', gap: '10px', marginBottom: '20px'}}>
-              <input 
-                placeholder="Ej: Corte + Barba" 
-                style={styles.input} 
-                value={newServiceName}
-                onChange={e => setNewServiceName(e.target.value)}
-              />
-              <input 
-                placeholder="$$" 
-                type="number"
-                style={{...styles.input, width:'80px'}} 
-                value={newServicePrice}
-                onChange={e => setNewServicePrice(e.target.value)}
-              />
-              <button style={styles.button} onClick={addService}>AGREGAR</button>
-            </div>
-
             {services.map((s:any) => (
               <div key={s.id} style={{display:'flex', justifyContent:'space-between', padding:'10px', borderBottom:'1px solid #333'}}>
-                <span style={{color:'white'}}>{s.name} - <span style={{color:'#4CAF50'}}>${s.price}</span></span>
-                <button onClick={() => deleteService(s.id)} style={{background:'red', border:'none', borderRadius:'5px', padding:'5px 10px', cursor:'pointer'}}>BORRAR</button>
+                <span>{s.name} (${s.price}) - {s.duration} min</span>
+                <button onClick={() => deleteService(s.id)} style={{background:'red', border:'none', borderRadius:'5px', padding:'5px'}}>🗑️</button>
               </div>
             ))}
           </div>
 
+          <div style={styles.card}>
+             <h3>💈 Equipo</h3>
+             <div style={{display: 'flex', gap: '5px'}}>
+               <input style={styles.input} placeholder="Nombre..." value={newBarberName} onChange={(e) => setNewBarberName(e.target.value)}/>
+               <button style={styles.button} onClick={hireBarber}>➕</button>
+             </div>
+             {barbers.map((b: any) => (
+               <div key={b.id} style={{display: 'flex', justifyContent: 'space-between', marginTop:'10px'}}>
+                 <span>{b.name}</span>
+                 <button onClick={() => fireBarber(b.id)} style={{background: '#ff4444', border: 'none', borderRadius: '5px'}}>🗑️</button>
+               </div>
+             ))}
+          </div>
         </>
       )}
-
     </div>
   )
 }
@@ -396,13 +278,13 @@ function App() {
 const styles = {
   container: { maxWidth: '500px', margin: '0 auto', padding: '20px', fontFamily: 'Arial, sans-serif', color: 'white' },
   card: { background: '#1a1a1a', padding: '20px', borderRadius: '15px', boxShadow: '0 4px 15px rgba(0,0,0,0.5)', marginBottom: '20px' },
-  label: { display: 'block', fontSize: '0.8rem', color: '#888', marginBottom: '5px', marginTop: '15px', textTransform: 'uppercase' as const, letterSpacing: '1px' },
-  input: { width: '100%', padding: '12px', background: '#333', border: '1px solid #444', borderRadius: '8px', color: 'white', fontSize: '1rem', boxSizing: 'border-box' as const },
-  select: { width: '100%', padding: '12px', background: '#333', border: '1px solid #444', borderRadius: '8px', color: 'white', fontSize: '1rem', boxSizing: 'border-box' as const },
-  mainButton: { width: '100%', padding: '15px', background: 'linear-gradient(45deg, #00C853, #64DD17)', border: 'none', borderRadius: '10px', color: 'white', fontWeight: 'bold', fontSize: '1.1rem', marginTop: '25px', cursor: 'pointer' },
-  button: { padding: '10px 20px', background: '#007AFF', border: 'none', borderRadius: '8px', color: 'white', fontWeight: 'bold', cursor: 'pointer' },
-  tab: { padding: '10px 20px', background: 'transparent', border: 'none', color: '#666', fontWeight: 'bold', cursor: 'pointer' },
-  activeTab: { padding: '10px 20px', background: '#007AFF', border: 'none', borderRadius: '15px', color: 'white', fontWeight: 'bold', cursor: 'pointer' }
+  label: { display: 'block', fontSize: '0.8rem', color: '#888', marginBottom: '5px', marginTop: '15px' },
+  input: { width: '100%', padding: '12px', background: '#333', border: '1px solid #444', borderRadius: '8px', color: 'white', boxSizing: 'border-box' as const },
+  select: { width: '100%', padding: '12px', background: '#333', border: '1px solid #444', borderRadius: '8px', color: 'white', boxSizing: 'border-box' as const },
+  mainButton: { width: '100%', padding: '15px', background: 'linear-gradient(45deg, #00C853, #64DD17)', border: 'none', borderRadius: '10px', color: 'white', fontWeight: 'bold', marginTop: '25px', cursor: 'pointer' },
+  button: { padding: '10px 15px', background: '#007AFF', border: 'none', borderRadius: '8px', color: 'white', fontWeight: 'bold', cursor: 'pointer' },
+  tab: { padding: '10px', background: 'transparent', border: 'none', color: '#666', fontWeight: 'bold', cursor: 'pointer' },
+  activeTab: { padding: '10px', background: '#007AFF', border: 'none', borderRadius: '15px', color: 'white', fontWeight: 'bold', cursor: 'pointer' }
 }
 
 export default App

@@ -22,37 +22,29 @@ app.get('/services', async (req, res) => {
   res.json(services);
 });
 
-// 3. Agendar Cita (SUPER INTELIGENTE: Horarios + Choques + Regla 70%)
+// 3. Agendar Cita (INTELIGENTE: Tiempos variables + Choques + Regla 70%)
 app.post('/appointments', async (req, res) => {
   try {
     const { barberId, serviceId, clientName, clientPhone, date } = req.body;
 
-    // --- PASO 1: Calcular tiempos exactos ---
+    // A. Buscar servicio y su duración real
     const service = await prisma.service.findUnique({ where: { id: Number(serviceId) } });
     if (!service) return res.status(400).json({ error: 'Servicio no encontrado' });
 
+    // B. Calcular hora de fin según la duración (30, 45, 60 min...)
     const fechaInicio = new Date(date);
-    // Usamos la duración del servicio (ej: 60 min)
-    const fechaFin = new Date(fechaInicio.getTime() + service.duration * 60000);
+    const duracion = service.duration || 30; // Si no tiene, usa 30
+    const fechaFin = new Date(fechaInicio.getTime() + duracion * 60000);
 
-    // --- PASO 2: Validar Horarios de la Tienda (El Portero) ---
-    const dia = fechaInicio.getDay(); // 0 = Domingo
+    // C. Validar Horarios (Domingo cerrado, etc)
+    const dia = fechaInicio.getDay(); 
     const hora = fechaInicio.getHours();
 
-    // Domingo Cerrado
-    if (dia === 0) {
-        return res.status(400).json({ error: '🚫 Lo sentimos, los Domingos estamos cerrados.' });
-    }
-    // Sábados (9am - 5pm)
-    if (dia === 6) {
-        if (hora < 9 || hora >= 17) return res.status(400).json({ error: '🚫 El horario de Sábado es de 9am a 5pm.' });
-    }
-    // Lunes a Viernes (9am - 7pm)
-    if (dia >= 1 && dia <= 5) {
-        if (hora < 9 || hora >= 19) return res.status(400).json({ error: '🚫 Entre semana abrimos de 9am a 7pm.' });
-    }
+    if (dia === 0) return res.status(400).json({ error: '🚫 Los Domingos estamos cerrados.' });
+    if (dia === 6 && (hora < 9 || hora >= 17)) return res.status(400).json({ error: '🚫 Sábados: 9am - 5pm.' });
+    if (dia >= 1 && dia <= 5 && (hora < 9 || hora >= 19)) return res.status(400).json({ error: '🚫 Lunes a Viernes: 9am - 7pm.' });
 
-    // --- PASO 3: PROTECCIÓN DE CHOQUES (¿El barbero está libre?) ---
+    // D. PROTECCIÓN DE CHOQUES
     const choqueCita = await prisma.appointment.findFirst({
       where: {
         barberId: Number(barberId),
@@ -60,30 +52,19 @@ app.post('/appointments', async (req, res) => {
         endDate: { gt: fechaInicio }
       }
     });
+    if (choqueCita) return res.status(409).json({ error: '❌ Este barbero ya está ocupado a esa hora.' });
 
-    if (choqueCita) {
-      return res.status(409).json({ error: '❌ Este barbero ya está ocupado a esa hora.' });
-    }
-
-    // --- PASO 4: REGLA DEL 70% (Reservar espacio para Walk-ins) ---
+    // E. REGLA DEL 70% (Walk-ins)
     const totalBarberos = await prisma.barber.count({ where: { isActive: true } });
-    
-    // Contamos barberos ocupados A ESA HORA
     const barberosOcupados = await prisma.appointment.count({
-      where: {
-        date: { lt: fechaFin },
-        endDate: { gt: fechaInicio }
-      }
+      where: { date: { lt: fechaFin }, endDate: { gt: fechaInicio } }
     });
 
-    const porcentajeOcupacion = (barberosOcupados / totalBarberos) * 100;
-
-    // Si el 70% o más está ocupado, bloqueamos la app
-    if (porcentajeOcupacion >= 70) {
-       return res.status(409).json({ error: '🚫 Alta demanda: Horario reservado solo para Walk-ins.' });
+    if (totalBarberos > 0 && (barberosOcupados / totalBarberos) * 100 >= 70) {
+       return res.status(409).json({ error: '🚫 Alta demanda: Reservado para Walk-ins.' });
     }
 
-    // --- PASO 5: SI PASA TODO, GUARDAMOS LA CITA ---
+    // F. Guardar
     const newAppointment = await prisma.appointment.create({
       data: {
         barberId: Number(barberId),
@@ -102,7 +83,7 @@ app.post('/appointments', async (req, res) => {
   }
 });
 
-// 4. Ver Citas (Dashboard Admin)
+// 4. Ver Citas
 app.get('/appointments', async (req, res) => {
   const appointments = await prisma.appointment.findMany({
     include: { barber: true, service: true },
@@ -113,45 +94,45 @@ app.get('/appointments', async (req, res) => {
 
 // 5. Borrar Cita
 app.delete('/appointments/:id', async (req, res) => {
-  const { id } = req.params;
   try {
-    await prisma.appointment.delete({ where: { id: Number(id) } });
+    await prisma.appointment.delete({ where: { id: Number(req.params.id) } });
     res.json({ message: 'Cita eliminada' });
   } catch (error) {
-    res.status(500).json({ error: 'No se pudo borrar' });
+    res.status(500).json({ error: 'Error al borrar' });
   }
 });
 
 // 6. Contratar Barbero
 app.post('/barbers', async (req, res) => {
   try {
-    const { name } = req.body;
-    const newBarber = await prisma.barber.create({ data: { name, isActive: true } });
+    const newBarber = await prisma.barber.create({ data: { name: req.body.name, isActive: true } });
     res.json(newBarber);
   } catch (error) {
-    res.status(500).json({ error: 'Error al crear barbero' });
+    res.status(500).json({ error: 'Error' });
   }
 });
 
 // 7. Despedir Barbero
 app.delete('/barbers/:id', async (req, res) => {
   try {
-    const { id } = req.params;
-    await prisma.appointment.deleteMany({ where: { barberId: Number(id) } });
-    await prisma.barber.delete({ where: { id: Number(id) } });
-    res.json({ message: 'Barbero eliminado' });
+    await prisma.appointment.deleteMany({ where: { barberId: Number(req.params.id) } });
+    await prisma.barber.delete({ where: { id: Number(req.params.id) } });
+    res.json({ message: 'Eliminado' });
   } catch (error) {
-    res.status(500).json({ error: 'Error al eliminar barbero' });
+    res.status(500).json({ error: 'Error' });
   }
 });
 
-// 8. Crear Servicio (Precios)
+// 8. Crear Servicio (CON DURACIÓN)
 app.post('/services', async (req, res) => {
   try {
-    const { name, price } = req.body;
-    // Por defecto duración 30, pero tú puedes editarlo en la base de datos si quieres
+    const { name, price, duration } = req.body;
     const newService = await prisma.service.create({
-      data: { name, price: Number(price), duration: 30 }
+      data: { 
+        name, 
+        price: Number(price), 
+        duration: Number(duration) || 30 
+      }
     });
     res.json(newService);
   } catch (error) {
@@ -162,12 +143,11 @@ app.post('/services', async (req, res) => {
 // 9. Eliminar Servicio
 app.delete('/services/:id', async (req, res) => {
   try {
-    const { id } = req.params;
-    await prisma.appointment.deleteMany({ where: { serviceId: Number(id) } });
-    await prisma.service.delete({ where: { id: Number(id) } });
-    res.json({ message: 'Servicio eliminado' });
+    await prisma.appointment.deleteMany({ where: { serviceId: Number(req.params.id) } });
+    await prisma.service.delete({ where: { id: Number(req.params.id) } });
+    res.json({ message: 'Eliminado' });
   } catch (error) {
-    res.status(500).json({ error: 'Error al eliminar servicio' });
+    res.status(500).json({ error: 'Error' });
   }
 });
 
