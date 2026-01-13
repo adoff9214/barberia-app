@@ -54,6 +54,33 @@ function App() {
     fetch(`${API_URL}/appointments`).then(r => r.json()).then(setAppointments)
   }
 
+  // --- 🕵️‍♂️ FUNCIÓN NUEVA: ¿ESTÁ LIBRE ESTA HORA? ---
+  const checkAvailability = (time: string) => {
+    // Si no han elegido barbero o fecha, mostramos todo disponible
+    if (!selectedBarber || !selectedDate) return true;
+
+    // Calculamos la fecha/hora exacta de este slot
+    const slotDate = new Date(`${selectedDate}T${time}`);
+
+    // Buscamos si hay ALGUNA cita que choque
+    const isBusy = appointments.some(appt => {
+      // 1. ¿Es el mismo barbero?
+      // (Usamos '==' para que no importe si uno es texto y otro número)
+      if (appt.barberId != selectedBarber) return false;
+
+      // 2. Traemos las fechas de la cita existente
+      const start = new Date(appt.date);
+      const end = new Date(appt.endDate);
+
+      // 3. ¿El slot cae dentro de esa cita?
+      // (Si el slot es >= Inicio Y el slot es < Fin)
+      return slotDate >= start && slotDate < end;
+    });
+
+    // Si está ocupado (isBusy es true), devolvemos FALSE (no disponible)
+    return !isBusy;
+  }
+
   // --- FUNCIONES DE CLIENTE (RESERVAR) ---
   const handleBooking = async () => {
     if (!selectedBarber || !selectedService || !selectedDate || !selectedTime || !name) {
@@ -76,7 +103,6 @@ function App() {
         }),
       })
 
-      // Leemos la respuesta para ver errores inteligentes
       const data = await response.json() 
 
       if (response.ok) {
@@ -94,15 +120,12 @@ function App() {
   }
 
   // --- FUNCIONES DE ADMIN (JEFE) ---
-
-  // 1. Borrar Cita
   const handleDelete = async (id: any) => {
     if (!confirm('¿Borrar esta cita?')) return
     await fetch(`${API_URL}/appointments/${id}`, { method: 'DELETE' })
     refreshAppointments()
   }
 
-  // 2. Contratar Barbero
   const hireBarber = async () => {
     if (!newBarberName) return alert('Escribe un nombre')
     await fetch(`${API_URL}/barbers`, {
@@ -114,14 +137,12 @@ function App() {
     fetchBarbers() 
   }
 
-  // 3. Despedir Barbero
   const fireBarber = async (id: any) => {
     if (!confirm('¿Seguro que quieres despedir a este barbero? Se borrarán sus citas.')) return
     await fetch(`${API_URL}/barbers/${id}`, { method: 'DELETE' })
     fetchBarbers() 
   }
 
-  // 4. Crear Nuevo Servicio
   const addService = async () => {
     if (!newServiceName || !newServicePrice) return alert('Faltan datos del servicio')
     await fetch(`${API_URL}/services`, {
@@ -138,7 +159,6 @@ function App() {
     fetchServices()
   }
 
-  // 5. Borrar Servicio
   const deleteService = async (id: any) => {
     if (!confirm('¿Borrar este servicio del menú?')) return
     await fetch(`${API_URL}/services/${id}`, { method: 'DELETE' })
@@ -224,13 +244,26 @@ function App() {
                >
                  <option value="">Selecciona hora...</option>
                  {timeSlots.map(time => {
+                   // 1. REVISAMOS SI ESTÁ DISPONIBLE
+                   const isAvailable = checkAvailability(time);
+                   
+                   // 2. FORMATEAMOS LA HORA (AM/PM)
                    const [h, m] = time.split(':')
                    const hour = parseInt(h)
                    const ampm = hour >= 12 ? 'PM' : 'AM'
                    const hour12 = hour % 12 || 12
                    const displayTime = `${hour12}:${m} ${ampm}`
+
+                   // 3. MOSTRAMOS LA OPCIÓN (Activada o Desactivada)
                    return (
-                     <option key={time} value={time}>{displayTime}</option>
+                     <option 
+                       key={time} 
+                       value={time} 
+                       disabled={!isAvailable} // 🚫 Aquí ocurre la magia del bloqueo
+                       style={!isAvailable ? {color: '#ff4444'} : {}}
+                     >
+                       {displayTime} {isAvailable ? '' : '(Ocupado)'}
+                     </option>
                    )
                  })}
                </select>
