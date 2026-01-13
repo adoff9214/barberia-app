@@ -22,23 +22,40 @@ app.get('/services', async (req, res) => {
   res.json(services);
 });
 
-// 3. Agendar Cita (CON PROTECCIÓN DOBLE Y REGLA DEL 70%)
+// 3. Agendar Cita (SUPER INTELIGENTE: Horarios + Choques + Regla 70%)
 app.post('/appointments', async (req, res) => {
   try {
     const { barberId, serviceId, clientName, clientPhone, date } = req.body;
 
-    // A. Calcular tiempos de inicio y fin
+    // --- PASO 1: Calcular tiempos exactos ---
     const service = await prisma.service.findUnique({ where: { id: Number(serviceId) } });
     if (!service) return res.status(400).json({ error: 'Servicio no encontrado' });
 
     const fechaInicio = new Date(date);
+    // Usamos la duración del servicio (ej: 60 min)
     const fechaFin = new Date(fechaInicio.getTime() + service.duration * 60000);
 
-    // --- PROTECCIÓN 1: ¿EL BARBERO ESTÁ LIBRE? ---
+    // --- PASO 2: Validar Horarios de la Tienda (El Portero) ---
+    const dia = fechaInicio.getDay(); // 0 = Domingo
+    const hora = fechaInicio.getHours();
+
+    // Domingo Cerrado
+    if (dia === 0) {
+        return res.status(400).json({ error: '🚫 Lo sentimos, los Domingos estamos cerrados.' });
+    }
+    // Sábados (9am - 5pm)
+    if (dia === 6) {
+        if (hora < 9 || hora >= 17) return res.status(400).json({ error: '🚫 El horario de Sábado es de 9am a 5pm.' });
+    }
+    // Lunes a Viernes (9am - 7pm)
+    if (dia >= 1 && dia <= 5) {
+        if (hora < 9 || hora >= 19) return res.status(400).json({ error: '🚫 Entre semana abrimos de 9am a 7pm.' });
+    }
+
+    // --- PASO 3: PROTECCIÓN DE CHOQUES (¿El barbero está libre?) ---
     const choqueCita = await prisma.appointment.findFirst({
       where: {
         barberId: Number(barberId),
-        // Lógica de choque: (NuevaCita Empieza ANTES de que termine la Vieja) Y (NuevaCita Termina DESPUÉS de que empiece la Vieja)
         date: { lt: fechaFin },
         endDate: { gt: fechaInicio }
       }
@@ -48,11 +65,10 @@ app.post('/appointments', async (req, res) => {
       return res.status(409).json({ error: '❌ Este barbero ya está ocupado a esa hora.' });
     }
 
-    // --- PROTECCIÓN 2: REGLA DEL 70% (WALK-INS) ---
-    // 1. Contamos cuántos barberos activos tienes en total
+    // --- PASO 4: REGLA DEL 70% (Reservar espacio para Walk-ins) ---
     const totalBarberos = await prisma.barber.count({ where: { isActive: true } });
-
-    // 2. Contamos cuántos barberos YA están ocupados a esa misma hora en toda la tienda
+    
+    // Contamos barberos ocupados A ESA HORA
     const barberosOcupados = await prisma.appointment.count({
       where: {
         date: { lt: fechaFin },
@@ -60,16 +76,14 @@ app.post('/appointments', async (req, res) => {
       }
     });
 
-    // 3. Calculamos el porcentaje de ocupación
     const porcentajeOcupacion = (barberosOcupados / totalBarberos) * 100;
 
-    // 4. Si ya pasamos el 70% (ej: 7 de 10 ocupados), bloqueamos la App
-    // (Nota: Si tienes menos de 3 barberos, esta regla puede ser muy estricta, pero funcionará con 10)
+    // Si el 70% o más está ocupado, bloqueamos la app
     if (porcentajeOcupacion >= 70) {
        return res.status(409).json({ error: '🚫 Alta demanda: Horario reservado solo para Walk-ins.' });
     }
 
-    // --- SI PASA LAS DOS BARRERAS, GUARDAMOS ---
+    // --- PASO 5: SI PASA TODO, GUARDAMOS LA CITA ---
     const newAppointment = await prisma.appointment.create({
       data: {
         barberId: Number(barberId),
@@ -85,54 +99,6 @@ app.post('/appointments', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error interno del servidor' });
-  }
-});
-    // --- 🛑 EL PORTERO: Validar Horario ---
-    if (date) {
-      const fechaCita = new Date(date);
-      const dia = fechaCita.getDay(); // 0 = Domingo, 1 = Lunes... 6 = Sábado
-      const hora = fechaCita.getHours();
-
-      // REGLA 1: Domingo Cerrado
-      if (dia === 0) {
-        return res.status(400).json({ error: '🚫 Lo sentimos, los Domingos estamos cerrados.' });
-      }
-
-      // REGLA 2: Sábados (9am - 5pm)
-      if (dia === 6) {
-        if (hora < 9 || hora >= 17) { // 17 es las 5 PM
-           return res.status(400).json({ error: '🚫 El horario de Sábado es de 9am a 5pm.' });
-        }
-      }
-
-      // REGLA 3: Lunes a Viernes (9am - 7pm)
-      if (dia >= 1 && dia <= 5) {
-        if (hora < 9 || hora >= 19) { // 19 es las 7 PM
-           return res.status(400).json({ error: '🚫 Entre semana abrimos de 9am a 7pm.' });
-        }
-      }
-    }
-    // ----------------------------------------------------
-
-    // Configurar fechas
-    const fechaInicio = date ? new Date(date) : new Date();
-    const fechaFin = new Date(fechaInicio.getTime() + 30 * 60000); // 30 min por defecto
-
-    const newAppointment = await prisma.appointment.create({
-      data: {
-        barberId: Number(barberId),
-        serviceId: Number(serviceId),
-        clientName: String(clientName),
-        clientPhone: String(clientPhone),
-        date: fechaInicio,
-        endDate: fechaFin
-      } as any
-    });
-    res.json(newAppointment);
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Error al crear la cita' });
   }
 });
 
@@ -183,6 +149,7 @@ app.delete('/barbers/:id', async (req, res) => {
 app.post('/services', async (req, res) => {
   try {
     const { name, price } = req.body;
+    // Por defecto duración 30, pero tú puedes editarlo en la base de datos si quieres
     const newService = await prisma.service.create({
       data: { name, price: Number(price), duration: 30 }
     });

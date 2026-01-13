@@ -3,7 +3,6 @@ import './App.css'
 
 function App() {
   // --- ESTADOS (MEMORIA) ---
-  // Tipos any[] para evitar errores estrictos de TypeScript
   const [barbers, setBarbers] = useState<any[]>([])
   const [services, setServices] = useState<any[]>([])
   const [appointments, setAppointments] = useState<any[]>([])
@@ -20,7 +19,7 @@ function App() {
   const [view, setView] = useState('cliente') // 'cliente' o 'admin'
   const [newBarberName, setNewBarberName] = useState('')
   
-  // NUEVO: Variables para crear servicios/precios
+  // Variables para crear servicios/precios
   const [newServiceName, setNewServiceName] = useState('')
   const [newServicePrice, setNewServicePrice] = useState('')
 
@@ -54,14 +53,14 @@ function App() {
   const refreshAppointments = () => {
     fetch(`${API_URL}/appointments`).then(r => r.json()).then(setAppointments)
   }
-// --- FUNCIONES DE CLIENTE (RESERVAR) ---
+
+  // --- FUNCIONES DE CLIENTE (RESERVAR) ---
   const handleBooking = async () => {
     if (!selectedBarber || !selectedService || !selectedDate || !selectedTime || !name) {
       alert("⚠️ Faltan datos (Elige barbero, servicio, día, hora y tu nombre)")
       return
     }
 
-    // Combinar fecha y hora
     const finalDate = new Date(`${selectedDate}T${selectedTime}`)
 
     try {
@@ -77,8 +76,7 @@ function App() {
         }),
       })
 
-      // 👇 ESTA ES LA PARTE IMPORTANTE NUEVA
-      // Leemos la respuesta para ver si es un error de choque o de 70%
+      // Leemos la respuesta para ver errores inteligentes
       const data = await response.json() 
 
       if (response.ok) {
@@ -87,37 +85,7 @@ function App() {
         setPhone('')
         refreshAppointments() 
       } else {
-        // Aquí mostramos el mensaje específico que programamos en el servidor
         alert(data.error || "❌ Hubo un error al reservar")
-      }
-    } catch (error) {
-      console.error(error)
-      alert("Error de conexión")
-    }
-  }
-
-    const finalDate = new Date(`${selectedDate}T${selectedTime}`)
-
-    try {
-      const response = await fetch(`${API_URL}/appointments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          barberId: selectedBarber,
-          serviceId: selectedService,
-          clientName: name,
-          clientPhone: phone,
-          date: finalDate 
-        }),
-      })
-
-      if (response.ok) {
-        alert("✅ ¡Cita reservada con éxito!")
-        setName('')
-        setPhone('')
-        refreshAppointments() 
-      } else {
-        alert("❌ Hubo un error al reservar")
       }
     } catch (error) {
       console.error(error)
@@ -143,7 +111,6 @@ function App() {
       body: JSON.stringify({ name: newBarberName })
     })
     setNewBarberName('')
-    // Actualización silenciosa (sin recargar página)
     fetchBarbers() 
   }
 
@@ -154,7 +121,7 @@ function App() {
     fetchBarbers() 
   }
 
-  // 4. Crear Nuevo Servicio (Corte/Precio) - ¡NUEVO!
+  // 4. Crear Nuevo Servicio
   const addService = async () => {
     if (!newServiceName || !newServicePrice) return alert('Faltan datos del servicio')
     await fetch(`${API_URL}/services`, {
@@ -163,7 +130,7 @@ function App() {
       body: JSON.stringify({ 
         name: newServiceName, 
         price: newServicePrice,
-        duration: 30 // Por defecto 30 min (puedes cambiarlo si quieres)
+        duration: 30 
       })
     })
     setNewServiceName('')
@@ -171,7 +138,7 @@ function App() {
     fetchServices()
   }
 
-  // 5. Borrar Servicio - ¡NUEVO!
+  // 5. Borrar Servicio
   const deleteService = async (id: any) => {
     if (!confirm('¿Borrar este servicio del menú?')) return
     await fetch(`${API_URL}/services/${id}`, { method: 'DELETE' })
@@ -197,7 +164,7 @@ function App() {
           <button 
             onClick={() => {
               const pass = prompt('Contraseña de Admin:')
-              if (pass === '2604') setView('admin') // AQUÍ ESTÁ TU CONTRASEÑA
+              if (pass === '2604') setView('admin')
               else alert('Contraseña incorrecta')
             }}
             style={view === 'admin' ? styles.activeTab : styles.tab}
@@ -257,7 +224,6 @@ function App() {
                >
                  <option value="">Selecciona hora...</option>
                  {timeSlots.map(time => {
-                   // CONVERTIDOR VISUAL A AM/PM
                    const [h, m] = time.split(':')
                    const hour = parseInt(h)
                    const ampm = hour >= 12 ? 'PM' : 'AM'
@@ -359,7 +325,7 @@ function App() {
             ))}
           </div>
 
-          {/* TARJETA 3: GESTIÓN DE PRECIOS (¡NUEVO!) */}
+          {/* TARJETA 3: GESTIÓN DE PRECIOS */}
           <div style={styles.card}>
             <h3>💰 Mis Servicios y Precios</h3>
             <div style={{display: 'flex', gap: '10px', marginBottom: '20px'}}>
