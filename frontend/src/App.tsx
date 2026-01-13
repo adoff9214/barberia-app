@@ -54,13 +54,47 @@ function App() {
   const refreshAppointments = () => {
     fetch(`${API_URL}/appointments`).then(r => r.json()).then(setAppointments)
   }
-
-  // --- FUNCIONES DE CLIENTE (RESERVAR) ---
+// --- FUNCIONES DE CLIENTE (RESERVAR) ---
   const handleBooking = async () => {
     if (!selectedBarber || !selectedService || !selectedDate || !selectedTime || !name) {
       alert("⚠️ Faltan datos (Elige barbero, servicio, día, hora y tu nombre)")
       return
     }
+
+    // Combinar fecha y hora
+    const finalDate = new Date(`${selectedDate}T${selectedTime}`)
+
+    try {
+      const response = await fetch(`${API_URL}/appointments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          barberId: selectedBarber,
+          serviceId: selectedService,
+          clientName: name,
+          clientPhone: phone,
+          date: finalDate 
+        }),
+      })
+
+      // 👇 ESTA ES LA PARTE IMPORTANTE NUEVA
+      // Leemos la respuesta para ver si es un error de choque o de 70%
+      const data = await response.json() 
+
+      if (response.ok) {
+        alert("✅ ¡Cita reservada con éxito!")
+        setName('')
+        setPhone('')
+        refreshAppointments() 
+      } else {
+        // Aquí mostramos el mensaje específico que programamos en el servidor
+        alert(data.error || "❌ Hubo un error al reservar")
+      }
+    } catch (error) {
+      console.error(error)
+      alert("Error de conexión")
+    }
+  }
 
     const finalDate = new Date(`${selectedDate}T${selectedTime}`)
 

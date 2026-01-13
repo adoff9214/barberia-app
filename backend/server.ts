@@ -22,11 +22,71 @@ app.get('/services', async (req, res) => {
   res.json(services);
 });
 
-// 3. Agendar Cita (CON HORARIO INTELIGENTE 🧠⏰)
+// 3. Agendar Cita (CON PROTECCIÓN DOBLE Y REGLA DEL 70%)
 app.post('/appointments', async (req, res) => {
   try {
     const { barberId, serviceId, clientName, clientPhone, date } = req.body;
-    
+
+    // A. Calcular tiempos de inicio y fin
+    const service = await prisma.service.findUnique({ where: { id: Number(serviceId) } });
+    if (!service) return res.status(400).json({ error: 'Servicio no encontrado' });
+
+    const fechaInicio = new Date(date);
+    const fechaFin = new Date(fechaInicio.getTime() + service.duration * 60000);
+
+    // --- PROTECCIÓN 1: ¿EL BARBERO ESTÁ LIBRE? ---
+    const choqueCita = await prisma.appointment.findFirst({
+      where: {
+        barberId: Number(barberId),
+        // Lógica de choque: (NuevaCita Empieza ANTES de que termine la Vieja) Y (NuevaCita Termina DESPUÉS de que empiece la Vieja)
+        date: { lt: fechaFin },
+        endDate: { gt: fechaInicio }
+      }
+    });
+
+    if (choqueCita) {
+      return res.status(409).json({ error: '❌ Este barbero ya está ocupado a esa hora.' });
+    }
+
+    // --- PROTECCIÓN 2: REGLA DEL 70% (WALK-INS) ---
+    // 1. Contamos cuántos barberos activos tienes en total
+    const totalBarberos = await prisma.barber.count({ where: { isActive: true } });
+
+    // 2. Contamos cuántos barberos YA están ocupados a esa misma hora en toda la tienda
+    const barberosOcupados = await prisma.appointment.count({
+      where: {
+        date: { lt: fechaFin },
+        endDate: { gt: fechaInicio }
+      }
+    });
+
+    // 3. Calculamos el porcentaje de ocupación
+    const porcentajeOcupacion = (barberosOcupados / totalBarberos) * 100;
+
+    // 4. Si ya pasamos el 70% (ej: 7 de 10 ocupados), bloqueamos la App
+    // (Nota: Si tienes menos de 3 barberos, esta regla puede ser muy estricta, pero funcionará con 10)
+    if (porcentajeOcupacion >= 70) {
+       return res.status(409).json({ error: '🚫 Alta demanda: Horario reservado solo para Walk-ins.' });
+    }
+
+    // --- SI PASA LAS DOS BARRERAS, GUARDAMOS ---
+    const newAppointment = await prisma.appointment.create({
+      data: {
+        barberId: Number(barberId),
+        serviceId: Number(serviceId),
+        clientName,
+        clientPhone,
+        date: fechaInicio,
+        endDate: fechaFin
+      }
+    });
+    res.json(newAppointment);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
     // --- 🛑 EL PORTERO: Validar Horario ---
     if (date) {
       const fechaCita = new Date(date);
