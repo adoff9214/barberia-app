@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react'
 import './App.css'
 
 function App() {
-  // --- STATES ---
+  // --- ESTADOS (MEMORIA) ---
   const [barbers, setBarbers] = useState<any[]>([])
   const [services, setServices] = useState<any[]>([])
   const [appointments, setAppointments] = useState<any[]>([])
 
-  // Client Form Data
+  // Datos del formulario de Cliente
   const [selectedBarber, setSelectedBarber] = useState('')
   const [selectedService, setSelectedService] = useState('')
   const [selectedDate, setSelectedDate] = useState('') 
@@ -15,21 +15,22 @@ function App() {
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
 
-  // Admin Data
-  const [view, setView] = useState('client') // 'client' or 'admin'
+  // Datos para gestión de Admin
+  const [view, setView] = useState('cliente')
   
-  // Barber Management (Master Trick)
+  // GESTIÓN DE BARBEROS (Con la Trampa Maestra)
   const [newBarberName, setNewBarberName] = useState('')
-  const [newBarberDayOff, setNewBarberDayOff] = useState('1') // 1 = Monday default
+  const [newBarberDayOff, setNewBarberDayOff] = useState('1') // 1 = Lunes por defecto
   
-  // Service Management
+  // Variables para crear servicios
   const [newServiceName, setNewServiceName] = useState('')
   const [newServicePrice, setNewServicePrice] = useState('')
   const [newServiceDuration, setNewServiceDuration] = useState('30')
 
   const API_URL = 'https://barberia-cerebro.onrender.com'
 
-  const daysLabels = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  // Días de la semana para mostrar bonito
+  const daysLabels = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
   const timeSlots = [
     "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
@@ -48,70 +49,48 @@ function App() {
   const fetchServices = () => fetch(`${API_URL}/services`).then(r => r.json()).then(setServices)
   const refreshAppointments = () => fetch(`${API_URL}/appointments`).then(r => r.json()).then(setAppointments)
 
-  // --- LOGIC 1: GLOBAL SUNDAY CHECK ---
-  const isSunday = (dateStr: string) => {
-    if (!dateStr) return false;
-    const day = new Date(`${dateStr}T00:00:00`).getDay();
-    return day === 0; // 0 is Sunday
-  }
+  // --- LÓGICA DE DISPONIBILIDAD ---
+  const checkAvailability = (time: string) => {
+    if (!selectedBarber || !selectedDate) return true;
 
-  // --- LOGIC 2: BARBER WEEKLY DAY OFF ---
-  const isBarberDayOff = (dateStr: string) => {
-    if (!selectedBarber || !dateStr) return false;
+    // A. ENCONTRAR BARBERO Y SU DÍA LIBRE
     const barberObj = barbers.find(b => b.id == selectedBarber);
-    if (!barberObj) return false;
+    if (!barberObj) return true;
 
+    // "Desencriptar" el día libre (ej: "Darwin|1" -> 1)
     const parts = barberObj.name.split('|');
     const dayOffCode = parts.length > 1 ? parseInt(parts[1]) : -1;
 
-    const day = new Date(`${dateStr}T00:00:00`).getDay();
-    return day === dayOffCode;
-  }
+    // B. VERIFICAR SI LA FECHA SELECCIONADA ES SU DÍA LIBRE
+    const dayOfWeek = new Date(`${selectedDate}T00:00:00`).getDay();
 
-  // --- LOGIC 3: FULL DAY BLOCKING (VACATION/SICK) ---
-  const getDayBlockingStatus = (dateStr: string) => {
-     if (!selectedBarber || !dateStr) return null;
+    if (dayOfWeek === dayOffCode) {
+      return false; // BLOQUEADO: Es su día de descanso
+    }
 
-     const blocker = appointments.find(appt => 
-       appt.barberId == selectedBarber && 
-       appt.date.startsWith(dateStr) && 
-       appt.clientName.includes('⛔')
-     );
-
-     if (blocker) {
-       const name = blocker.clientName.toUpperCase();
-       if (name.includes('VACATION')) return 'VACATION ✈️';
-       if (name.includes('SICK')) return 'SICK 🤒';
-       return 'UNAVAILABLE ⛔';
-     }
-     return null;
-  }
-
-  // --- LOGIC 4: SPECIFIC TIME SLOT BUSY ---
-  const isTimeBusy = (time: string) => {
-    if (!selectedBarber || !selectedDate) return false;
+    // C. VERIFICAR CITAS EXISTENTES
     const slotDate = new Date(`${selectedDate}T${time}`);
-    
-    return appointments.some(appt => {
+    const isBusy = appointments.some(appt => {
       if (appt.barberId != selectedBarber) return false;
-      // Ignore blocking appointments here, they are handled by getDayBlockingStatus
-      if (appt.clientName.includes('⛔')) return false; 
-
       const start = new Date(appt.date);
       const end = appt.endDate ? new Date(appt.endDate) : new Date(start.getTime() + 30*60000); 
       return slotDate >= start && slotDate < end;
     });
+
+    return !isBusy;
   }
 
-  // --- BOOKING FUNCTION ---
+  // --- NUEVA LÓGICA CON WHATSAPP ---
   const handleBooking = async () => {
+    // 1. Validar datos
     if (!selectedBarber || !selectedService || !selectedDate || !selectedTime || !name) {
-      alert("⚠️ Missing info (Please select Barber, Service, Date, Time and Name)")
+      alert("⚠️ Faltan datos (Elige barbero, servicio, día, hora y tu nombre)")
       return
     }
     const finalDate = new Date(`${selectedDate}T${selectedTime}`)
     
     try {
+      // 2. Guardar en servidor
       const response = await fetch(`${API_URL}/appointments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -124,25 +103,47 @@ function App() {
         }),
       })
       const data = await response.json() 
+      
       if (response.ok) {
-        alert("✅ Appointment confirmed!")
+        // --- 3. ABRIR WHATSAPP ---
+        const serviceObj = services.find(s => s.id == selectedService);
+        const serviceName = serviceObj ? serviceObj.name : 'Corte';
+        
+        const mensaje = `Hola! Soy *${name}*. Acabo de reservar en la web:
+📅 *Fecha:* ${selectedDate}
+⏰ *Hora:* ${selectedTime}
+✂️ *Servicio:* ${serviceName}
+
+¿Me confirmas la cita?`;
+
+        // TU NÚMERO DE TELÉFONO
+        const tuNumeroTelefono = "15615246564"; 
+
+        const url = `https://wa.me/${tuNumeroTelefono}?text=${encodeURIComponent(mensaje)}`;
+        window.open(url, '_blank');
+        
+        // --- FINALIZAR ---
+        alert("✅ ¡Reserva enviada! Se abrirá WhatsApp para confirmar.")
         setName('')
         setPhone('')
         refreshAppointments() 
       } else {
-        alert(data.error || "❌ Error booking appointment")
+        alert(data.error || "❌ Hubo un error al reservar")
       }
     } catch (error) {
       console.error(error)
-      alert("Connection Error")
+      alert("Error de conexión")
     }
   }
 
-  // --- ADMIN FUNCTIONS ---
+  // --- FUNCIONES DE ADMIN ---
 
   const hireBarber = async () => {
-    if (!newBarberName) return alert('Enter a name')
+    if (!newBarberName) return alert('Escribe un nombre')
+    
+    // TRUCO: Guardamos "Darwin|1"
     const nameWithCode = `${newBarberName}|${newBarberDayOff}`
+
     await fetch(`${API_URL}/barbers`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -153,53 +154,42 @@ function App() {
   }
 
   const fireBarber = async (id: any) => {
-    if (!confirm('Are you sure?')) return
+    if (!confirm('¿Seguro que quieres despedir a este barbero?')) return
     await fetch(`${API_URL}/barbers/${id}`, { method: 'DELETE' })
     fetchBarbers() 
   }
 
   const blockDay = async (barberId: any, dateVal: string, reason: string) => {
-    if(!dateVal) return alert('Select date first');
+    if(!dateVal) return alert('Selecciona una fecha primero');
+    if(!confirm(`¿Bloquear el día ${dateVal} por ${reason}?`)) return;
+
+    // Cita falsa de 9 AM
+    const start = new Date(`${dateVal}T09:00:00`);
+    const fakeServiceId = services.length > 0 ? services[0].id : 1; 
     
-    const daysStr = prompt(`How many days of ${reason}?`, "1");
-    const days = parseInt(daysStr || "0");
-    
-    if (!days || days < 1) return; 
-    if(!confirm(`Block ${days} days starting ${dateVal}?`)) return;
-
-    const startDate = new Date(`${dateVal}T09:00:00`); 
-
-    for (let i = 0; i < days; i++) {
-        const currentDate = new Date(startDate);
-        currentDate.setDate(startDate.getDate() + i); 
-
-        const fakeServiceId = services.length > 0 ? services[0].id : 1;
-
-        await fetch(`${API_URL}/appointments`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              barberId: barberId,
-              serviceId: fakeServiceId, 
-              clientName: `⛔ ${reason.toUpperCase()} (Day ${i+1})`, 
-              clientPhone: '000',
-              date: currentDate
-            }),
-          });
-    }
-      
-    alert(`Blocked ${days} days.`);
-    refreshAppointments();
+    await fetch(`${API_URL}/appointments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          barberId: barberId,
+          serviceId: fakeServiceId, 
+          clientName: `⛔ ${reason.toUpperCase()}`, 
+          clientPhone: '000',
+          date: start
+        }),
+      });
+      alert('Bloqueo creado');
+      refreshAppointments();
   }
 
   const handleDelete = async (id: any) => {
-    if (!confirm('Delete?')) return
+    if (!confirm('¿Borrar esta cita?')) return
     await fetch(`${API_URL}/appointments/${id}`, { method: 'DELETE' })
     refreshAppointments()
   }
 
   const addService = async () => {
-    if (!newServiceName || !newServicePrice) return alert('Missing Data')
+    if (!newServiceName || !newServicePrice) return alert('Faltan datos')
     await fetch(`${API_URL}/services`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -216,7 +206,7 @@ function App() {
   }
 
   const deleteService = async (id: any) => {
-    if (!confirm('Delete Service?')) return
+    if (!confirm('¿Borrar servicio?')) return
     await fetch(`${API_URL}/services/${id}`, { method: 'DELETE' })
     fetchServices()
   }
@@ -228,148 +218,98 @@ function App() {
       {/* HEADER */}
       <div style={{textAlign: 'center', marginBottom: '30px'}}>
         <h1 style={{fontSize: '2.5rem', margin: '0'}}>💈 BARBER PRO 💈</h1>
-        <p style={{color: '#888'}}>Premium Booking System</p>
+        <p style={{color: '#888'}}>Sistema de Gestión Premium</p>
         
         <div style={{background: '#222', display: 'inline-flex', borderRadius: '20px', padding: '5px', marginTop: '10px'}}>
-          <button onClick={() => setView('client')} style={view === 'client' ? styles.activeTab : styles.tab}>🧔 CLIENT</button>
+          <button onClick={() => setView('cliente')} style={view === 'cliente' ? styles.activeTab : styles.tab}>🧔 CLIENTE</button>
           <button 
             onClick={() => {
-              const pass = prompt('Admin Password:')
+              const pass = prompt('Contraseña de Admin:')
               if (pass === '2604') setView('admin')
-              else alert('Wrong Password')
+              else alert('Contraseña incorrecta')
             }}
             style={view === 'admin' ? styles.activeTab : styles.tab}
           >🛡️ ADMIN</button>
         </div>
       </div>
 
-      {/* VIEW: CLIENT */}
-      {view === 'client' && (
+      {/* VISTA CLIENTE */}
+      {view === 'cliente' && (
         <div style={styles.card}>
-          <h2>New Booking</h2>
+          <h2>Nueva Reserva</h2>
           
-          <label style={styles.label}>BARBER</label>
+          <label style={styles.label}>BARBERO</label>
           <select style={styles.select} onChange={e => setSelectedBarber(e.target.value)} value={selectedBarber}>
-            <option value="">Select a barber...</option>
+            <option value="">Selecciona un experto...</option>
             {barbers.map((b: any) => (
+              // LIMPIEZA VISUAL
               <option key={b.id} value={b.id}>{b.name.split('|')[0]}</option>
             ))}
           </select>
 
-          <label style={styles.label}>SERVICE</label>
+          <label style={styles.label}>SERVICIO</label>
           <select style={styles.select} onChange={e => setSelectedService(e.target.value)} value={selectedService}>
-            <option value="">Select a service...</option>
+            <option value="">Selecciona el corte...</option>
             {services.map((s: any) => (
               <option key={s.id} value={s.id}>{s.name} - ${s.price} ({s.duration} min)</option>
             ))}
           </select>
 
-          <div style={{display: 'flex', gap: '10px', alignItems: 'flex-start'}}>
+          <div style={{display: 'flex', gap: '10px'}}>
             <div style={{flex: 1}}>
-               <label style={styles.label}>DATE</label>
+               <label style={styles.label}>DÍA</label>
                <input type="date" min={new Date().toISOString().split('T')[0]} style={styles.input} onChange={e => setSelectedDate(e.target.value)} />
             </div>
             <div style={{flex: 1}}>
-               <label style={styles.label}>TIME</label>
+               <label style={styles.label}>HORA</label>
                <select style={styles.select} onChange={e => setSelectedTime(e.target.value)}>
-                 <option value="">Select time...</option>
+                 <option value="">Selecciona hora...</option>
                  {timeSlots.map(time => {
-                   const sunday = isSunday(selectedDate);
-                   const dayOff = isBarberDayOff(selectedDate);
-                   const dayBlockReason = getDayBlockingStatus(selectedDate);
-                   const busy = isTimeBusy(time);
-                   
-                   let isDisabled = false;
-                   let displayText = '';
-
+                   const isAvailable = checkAvailability(time);
                    const [h, m] = time.split(':')
                    const hour = parseInt(h)
                    const ampm = hour >= 12 ? 'PM' : 'AM'
                    const hour12 = hour % 12 || 12
-                   const prettyTime = `${hour12}:${m} ${ampm}`
-
-                   if (sunday) {
-                     displayText = `⛔ CLOSED`;
-                     isDisabled = true;
-                   } else if (dayOff) {
-                     displayText = `🏠 DAY OFF`;
-                     isDisabled = true;
-                   } else if (dayBlockReason) {
-                     displayText = `⛔ ${dayBlockReason}`; 
-                     isDisabled = true;
-                   } else if (busy) {
-                     displayText = `${prettyTime} (Busy)`;
-                     isDisabled = true;
-                   } else {
-                     displayText = prettyTime;
-                   }
-
+                   const displayTime = `${hour12}:${m} ${ampm}`
                    return (
-                     <option key={time} value={time} disabled={isDisabled} style={isDisabled ? {background: '#333', color: '#777'} : {}}>
-                       {displayText}
+                     <option key={time} value={time} disabled={!isAvailable} style={!isAvailable ? {color: '#ff4444'} : {}}>
+                       {displayTime} {isAvailable ? '' : '(Ocupado)'}
                      </option>
                    )
                  })}
                </select>
             </div>
           </div>
-          
-          {/* --- RED WARNING BOX --- */}
-          {(() => {
-             const sunday = isSunday(selectedDate);
-             const dayOff = isBarberDayOff(selectedDate);
-             const blockReason = getDayBlockingStatus(selectedDate);
 
-             if (selectedDate && (sunday || dayOff || blockReason)) {
-               return (
-                 <div style={{
-                   marginTop: '15px', 
-                   padding: '15px', 
-                   background: '#ff4444', 
-                   color: 'white', 
-                   borderRadius: '10px', 
-                   textAlign: 'center',
-                   fontWeight: 'bold',
-                   border: '2px solid white'
-                 }}>
-                   {sunday && "🛑 SORRY, WE ARE CLOSED ON SUNDAYS"}
-                   {dayOff && "🏠 THIS BARBER IS OFF TODAY"}
-                   {blockReason && `⚠️ UNAVAILABLE: ${blockReason}`}
-                 </div>
-               )
-             }
-             return null;
-          })()}
-
-          <label style={styles.label}>YOUR NAME</label>
-          <input style={styles.input} placeholder="Full Name" value={name} onChange={e => setName(e.target.value)} />
-          <label style={styles.label}>PHONE</label>
+          <label style={styles.label}>TU NOMBRE</label>
+          <input style={styles.input} placeholder="Tu nombre completo" value={name} onChange={e => setName(e.target.value)} />
+          <label style={styles.label}>TELÉFONO</label>
           <input style={styles.input} placeholder="(555) 000-0000" value={phone} onChange={e => setPhone(e.target.value)} />
-          <button style={styles.mainButton} onClick={handleBooking}>🔥 CONFIRM BOOKING</button>
+          <button style={styles.mainButton} onClick={handleBooking}>🔥 RESERVAR Y CONFIRMAR</button>
         </div>
       )}
 
-      {/* VIEW: ADMIN */}
+      {/* VISTA ADMIN */}
       {view === 'admin' && (
         <>
           <div style={styles.card}>
             <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-              <h2>Live Agenda 📅</h2>
-              <button onClick={refreshAppointments} style={styles.button}>🔄 Refresh</button>
+              <h2>Agenda en Vivo 📅</h2>
+              <button onClick={refreshAppointments} style={styles.button}>🔄 Actualizar</button>
             </div>
-            
+            {/* Lista de citas */}
             <div style={{marginTop: '20px'}}>
-              {appointments.length === 0 ? <p style={{color: '#666'}}>No appointments yet.</p> : null}
+              {appointments.length === 0 ? <p style={{color: '#666'}}>No hay citas aún.</p> : null}
               {appointments.map((cita: any) => (
                 <div key={cita.id} style={{display: 'flex', padding: '10px', borderBottom: '1px solid #333', alignItems: 'center', justifyContent:'space-between'}}>
                    <div>
                       <span style={{color: '#4CAF50', fontWeight: 'bold'}}>
-                        {new Date(cita.date).toLocaleDateString()}
+                        {new Date(cita.date).toLocaleDateString()} - {new Date(cita.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                       </span>
                       <br/>
                       {cita.clientName.includes('⛔') 
                         ? <b style={{color:'orange'}}>{cita.clientName}</b> 
-                        : `${cita.clientName} - ${new Date(cita.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`
+                        : `${cita.clientName} (${cita.service?.name})`
                       }
                    </div>
                    <button onClick={() => handleDelete(cita.id)} style={{background: 'red', border: 'none', padding: '5px', borderRadius: '4px'}}>🗑️</button>
@@ -379,12 +319,13 @@ function App() {
           </div>
 
           <div style={styles.card}>
-             <h3>💈 Team & Days Off</h3>
+             <h3>💈 Equipo y Días Libres</h3>
              
+             {/* FORMULARIO DE CONTRATACIÓN */}
              <div style={{display: 'flex', gap: '5px', marginBottom: '15px'}}>
                <input 
                  style={{...styles.input, flex: 2}} 
-                 placeholder="Barber Name..." 
+                 placeholder="Nombre..." 
                  value={newBarberName} 
                  onChange={(e) => setNewBarberName(e.target.value)}
                />
@@ -394,16 +335,17 @@ function App() {
                   onChange={(e) => setNewBarberDayOff(e.target.value)}
                >
                  {daysLabels.map((label, idx) => (
-                   <option key={idx} value={idx}>Off: {label}</option>
+                   <option key={idx} value={idx}>Libre: {label}</option>
                  ))}
                </select>
                <button style={styles.button} onClick={hireBarber}>➕</button>
              </div>
 
+             {/* LISTA DE BARBEROS */}
              {barbers.map((b: any) => {
                const realName = b.name.split('|')[0];
                const dayCode = b.name.split('|')[1];
-               const dayLabel = dayCode ? daysLabels[parseInt(dayCode)] : 'None';
+               const dayLabel = dayCode ? daysLabels[parseInt(dayCode)] : 'Ninguno';
 
                return (
                 <div key={b.id} style={{borderTop: '1px solid #444', padding: '10px 0', marginTop:'10px'}}>
@@ -411,29 +353,30 @@ function App() {
                     <span>
                       <strong>{realName}</strong> 
                       <span style={{fontSize: '0.8rem', color: '#888', marginLeft: '8px'}}>
-                         (Off: {dayLabel})
+                         (Descansa: {dayLabel})
                       </span>
                     </span>
-                    <button onClick={() => fireBarber(b.id)} style={{background: '#ff4444', border: 'none', borderRadius: '5px', padding:'5px 10px', color:'white'}}>Fire 🗑️</button>
+                    <button onClick={() => fireBarber(b.id)} style={{background: '#ff4444', border: 'none', borderRadius: '5px', padding:'5px 10px', color:'white'}}>Despedir 🗑️</button>
                   </div>
                   
+                  {/* GESTIÓN DE EXCEPCIONES */}
                   <div style={{marginTop: '8px', display:'flex', gap:'5px', alignItems:'center', background:'#222', padding:'5px', borderRadius:'5px'}}>
-                    <span style={{fontSize:'0.7rem', color:'#aaa'}}>Block:</span>
+                    <span style={{fontSize:'0.7rem', color:'#aaa'}}>Bloquear:</span>
                     <input type="date" id={`date-${b.id}`} style={{...styles.input, width:'110px', padding:'4px', fontSize:'0.8rem'}} />
                     <button 
                       onClick={() => {
                          const el = document.getElementById(`date-${b.id}`) as HTMLInputElement;
-                         if(el) blockDay(b.id, el.value, 'Sick');
+                         if(el) blockDay(b.id, el.value, 'Enfermedad');
                       }} 
-                      style={{background: '#FFA500', border:'none', borderRadius:'3px', cursor:'pointer', fontSize:'0.7rem', padding:'4px 8px', color:'black'}}>
-                      🤒 Sick
+                      style={{background: '#FFA500', border:'none', borderRadius:'3px', cursor:'pointer', fontSize:'0.7rem', padding:'4px 8px'}}>
+                      🤒 Enf
                     </button>
                     <button 
                       onClick={() => {
                          const el = document.getElementById(`date-${b.id}`) as HTMLInputElement;
-                         if(el) blockDay(b.id, el.value, 'Vacation');
+                         if(el) blockDay(b.id, el.value, 'Vacaciones');
                       }}
-                      style={{background: '#00C853', border:'none', borderRadius:'3px', cursor:'pointer', fontSize:'0.7rem', padding:'4px 8px', color:'black'}}>
+                      style={{background: '#00C853', border:'none', borderRadius:'3px', cursor:'pointer', fontSize:'0.7rem', padding:'4px 8px'}}>
                       ✈️ Vac
                     </button>
                   </div>
@@ -442,10 +385,11 @@ function App() {
              })}
           </div>
 
+          {/* SERVICIOS */}
           <div style={styles.card}>
-            <h3>💰 Services</h3>
+            <h3>💰 Servicios</h3>
             <div style={{display: 'flex', gap: '5px', marginBottom: '10px'}}>
-              <input placeholder="Service Name..." style={{...styles.input, flex: 2}} value={newServiceName} onChange={e => setNewServiceName(e.target.value)}/>
+              <input placeholder="Corte..." style={{...styles.input, flex: 2}} value={newServiceName} onChange={e => setNewServiceName(e.target.value)}/>
               <input placeholder="$$" type="number" style={{...styles.input, width: '50px'}} value={newServicePrice} onChange={e => setNewServicePrice(e.target.value)}/>
               <select style={{...styles.select, width: '70px'}} value={newServiceDuration} onChange={e => setNewServiceDuration(e.target.value)}>
                 <option value="15">15m</option>
