@@ -48,14 +48,21 @@ function App() {
   const refreshAppointments = () => fetch(`${API_URL}/appointments`).then(r => r.json()).then(setAppointments)
 
   // ==========================================
-  // 2. FORMATO AUTOMÁTICO DE TELÉFONO (XXX-XXX-XXXX)
+  // 2. FORMATO AUTOMÁTICO DE TELÉFONO (561-XXX-XXXX)
   // ==========================================
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // 1. Eliminar cualquier letra o símbolo, dejando solo números
     const onlyNums = e.target.value.replace(/\D/g, ''); 
     let formatted = onlyNums;
-    if (onlyNums.length <= 3) formatted = onlyNums;
-    else if (onlyNums.length <= 6) formatted = `${onlyNums.slice(0, 3)}-${onlyNums.slice(3)}`;
-    else formatted = `${onlyNums.slice(0, 3)}-${onlyNums.slice(3, 6)}-${onlyNums.slice(6, 10)}`;
+
+    // 2. Aplicar los guiones automáticamente según la cantidad de números
+    if (onlyNums.length <= 3) {
+      formatted = onlyNums;
+    } else if (onlyNums.length <= 6) {
+      formatted = `${onlyNums.slice(0, 3)}-${onlyNums.slice(3)}`;
+    } else {
+      formatted = `${onlyNums.slice(0, 3)}-${onlyNums.slice(3, 6)}-${onlyNums.slice(6, 10)}`;
+    }
     setPhone(formatted);
   };
 
@@ -67,7 +74,7 @@ function App() {
   }
 
   // ==========================================
-  // 3. DETECTOR EXACTO DE ESTADO DEL DÍA (CORREGIDO PARA DOMINGOS)
+  // 3. DETECTOR EXACTO DE DÍAS (SOLUCIÓN DEFINITIVA PARA EL DOMINGO)
   // ==========================================
   const getDayStatus = () => {
     if (!selectedBarber || !selectedDate) return 'HIDDEN'; 
@@ -75,22 +82,21 @@ function App() {
     const barberObj = barbers.find(b => b.id == selectedBarber);
     if (!barberObj) return 'HIDDEN';
 
-    // A. ¿Es el día libre fijo del barbero? (CORRECCIÓN HUSO HORARIO)
-    const [y, m, d] = selectedDate.split('-').map(Number);
-    const dateObj = new Date(y, m - 1, d); // Fecha local exacta a medianoche
-    const dayOfWeek = dateObj.getDay(); // 0 = Domingo, 1 = Lunes...
+    // A. ¿Es el día libre fijo? 
+    // TRUCO MAESTRO: Agregamos "T12:00:00" para que sea el mediodía exacto. 
+    // Así es imposible que el Domingo se confunda con el Sábado en la noche.
+    const exactDateObj = new Date(`${selectedDate}T12:00:00`); 
+    const dayOfWeek = exactDateObj.getDay(); 
+    const dayOffCode = parseInt(barberObj.name.split('|')[1] || '-1');
     
-    const parts = barberObj.name.split('|');
-    const dayOffCode = parts.length > 1 ? parseInt(parts[1]) : -1;
-    
-    // Si el día del calendario es el día de descanso del barbero:
+    // Si el día de la semana coincide EXACTAMENTE con el código:
     if (dayOfWeek === dayOffCode) return 'DAY_OFF';
 
-    // B. ¿Es un día bloqueado por Vacaciones/Enfermedad?
+    // B. ¿Es Vacaciones o Enfermedad?
     const blockedAppt = appointments.find(appt => {
       const isSameBarber = appt.barberId == selectedBarber;
       const isBlock = appt.clientName.includes('⛔');
-      // Comparar fechas de manera segura sin horas
+      // Aseguramos que la fecha coincida exactamente en texto (ej. "2026-01-25")
       const apptDateStr = new Date(appt.date).toLocaleDateString('en-CA'); 
       return (isSameBarber && isBlock && apptDateStr === selectedDate);
     });
@@ -105,16 +111,16 @@ function App() {
     return 'OPEN';
   }
 
-  // Verificador individual de horas (Pasado / Ocupado)
+  // Verificador de Horas Pasadas y Choques
   const checkTimeSlot = (time: string) => {
     const [y, m, d] = selectedDate.split('-').map(Number);
     const [th, tm] = time.split(':').map(Number);
     const slotDate = new Date(y, m - 1, d, th, tm);
     
-    // Si la hora ya pasó:
+    // 1. Bloqueo de horas que ya pasaron HOY o en días anteriores
     if (slotDate < new Date()) return { available: false, reason: 'Pasado' };
 
-    // Si choca con otra cita normal:
+    // 2. Bloqueo si ya hay cita
     const isBusy = appointments.some(appt => {
       if (appt.barberId != selectedBarber || appt.clientName.includes('⛔')) return false;
       const start = new Date(appt.date);
@@ -131,7 +137,7 @@ function App() {
   // ==========================================
   const handleBooking = async () => {
     if (!selectedBarber || !selectedService || !selectedDate || !selectedTime || !name || phone.length < 12) {
-      alert("⚠️ Completa todos los datos y asegúrate de que el teléfono esté completo (10 dígitos)."); return;
+      alert("⚠️ Completa todos los datos y asegúrate de que el teléfono esté completo con guiones (10 dígitos)."); return;
     }
     const [y, m, d] = selectedDate.split('-').map(Number);
     const [th, tm] = selectedTime.split(':').map(Number);
@@ -157,8 +163,7 @@ function App() {
     setWaitlist([...waitlist, newEntry]);
     alert(`✅ ${name}, estás en lista de espera para el ${selectedDate}.`); setName(''); setPhone('');
   }
-
-  // ==========================================
+// ==========================================
   // 5. FUNCIONES ADMIN
   // ==========================================
   const hireBarber = async () => { if (!newBarberName) return; await fetch(`${API_URL}/barbers`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name: `${newBarberName}|${newBarberDayOff}` }) }); setNewBarberName(''); fetchBarbers() }
@@ -167,9 +172,10 @@ function App() {
   const blockDay = async (barberId: any, reason: string) => {
     if(!blockDateInput) return alert('Selecciona una fecha en la ZONA DE BLOQUEO (Admin)');
     const [y, m, d] = blockDateInput.split('-').map(Number);
+    // Usamos las 9:00 AM como ancla segura para el bloqueo
     const start = new Date(y, m - 1, d, 9, 0); 
     await fetch(`${API_URL}/appointments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ barberId: barberId, serviceId: services[0]?.id || 1, clientName: `⛔ ${reason.toUpperCase()}`, clientPhone: '000', date: start }), });
-    alert(`✅ ${reason} registrada.`); refreshAppointments();
+    alert(`✅ ${reason} registrada para el día ${blockDateInput}.`); refreshAppointments();
   }
 
   const handleDelete = async (id: any) => { if (confirm('¿Borrar?')) { await fetch(`${API_URL}/appointments/${id}`, { method: 'DELETE' }); refreshAppointments() } }
@@ -187,7 +193,6 @@ function App() {
   const isDayFull = dayStatus === 'OPEN' && timeSlots.filter(t => checkTimeSlot(t).available).length === 0;
 
   const activeAppointments = appointments.filter(a => new Date(a.date) >= now && !a.clientName.includes('⛔'));
-  const pastAppointments = appointments.filter(a => new Date(a.date) < now && !a.clientName.includes('⛔'));
   const blockedDays = appointments.filter(a => a.clientName.includes('⛔'));
 
   const financialData = appointments.filter(appt => {
@@ -208,6 +213,7 @@ function App() {
     const s = services.find(x => x.id == appt.serviceId); acc[p].spent += (s ? parseInt(s.price) : 0);
     return acc;
   }, {})).sort((a:any, b:any) => b.visits - a.visits);
+
   // ==========================================
   // 7. INTERFAZ GRÁFICA (UI)
   // ==========================================
@@ -250,7 +256,7 @@ function App() {
                <input type="date" className="input-field" min={todayStr} onChange={e => setSelectedDate(e.target.value)} />
              </div>
              
-             {/* 🛑 MAGIA DE LOS BLOQUEOS VISUALES (INCLUYE EL DOMINGO) */}
+             {/* 🛑 MAGIA DE LOS BLOQUEOS VISUALES (INCLUYE EL DOMINGO CORREGIDO) */}
              <div className="input-group" style={{flex:1}}>
                <label className="label">HORA</label>
                
@@ -278,7 +284,7 @@ function App() {
           <div className="input-group">
              <label className="label">DATOS PERSONALES</label>
              <input className="input-field" placeholder="Nombre completo" value={name} onChange={e => setName(e.target.value)} style={{marginBottom:'5px'}}/>
-             {/* 📞 INPUT DE TELÉFONO CON MÁSCARA AUTOMÁTICA */}
+             {/* 📞 INPUT DE TELÉFONO CON MÁSCARA AUTOMÁTICA (561-XXX-XXXX) */}
              <input 
                className="input-field" 
                placeholder="561-XXX-XXXX" 
