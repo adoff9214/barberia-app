@@ -2,12 +2,15 @@ import { useEffect, useState } from 'react'
 import './App.css'
 
 function App() {
-  // --- ESTADOS (MEMORIA) ---
+  // ==========================================
+  // 1. ESTADOS (MEMORIA)
+  // ==========================================
   const [barbers, setBarbers] = useState<any[]>([])
   const [services, setServices] = useState<any[]>([])
   const [appointments, setAppointments] = useState<any[]>([])
+  const [reviews, setReviews] = useState<any[]>([]) 
+  const [waitlist, setWaitlist] = useState<any[]>([]) 
 
-  // Datos del formulario de Cliente
   const [selectedBarber, setSelectedBarber] = useState('')
   const [selectedService, setSelectedService] = useState('')
   const [selectedDate, setSelectedDate] = useState('') 
@@ -15,413 +18,376 @@ function App() {
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
 
-  // Datos para gestión de Admin
   const [view, setView] = useState('cliente')
+  const [moneyFilter, setMoneyFilter] = useState('hoy')
   
-  // GESTIÓN DE BARBEROS (Con la Trampa Maestra)
   const [newBarberName, setNewBarberName] = useState('')
-  const [newBarberDayOff, setNewBarberDayOff] = useState('1') // 1 = Lunes por defecto
-  
-  // Variables para crear servicios
+  const [newBarberDayOff, setNewBarberDayOff] = useState('1') 
   const [newServiceName, setNewServiceName] = useState('')
   const [newServicePrice, setNewServicePrice] = useState('')
-  const [newServiceDuration, setNewServiceDuration] = useState('30')
+  const [blockDateInput, setBlockDateInput] = useState('')
 
   const API_URL = 'https://barberia-cerebro.onrender.com'
-
-  // Días de la semana para mostrar bonito
   const daysLabels = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
   const timeSlots = [
     "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
     "12:00", "12:30", "13:00", "13:30", "14:00", "14:30",
     "15:00", "15:30", "16:00", "16:30", "17:00", "17:30",
-    "18:00", "18:30"
+    "18:00", "18:30", "19:00", "19:30"
   ]
 
   useEffect(() => {
-    fetchBarbers()
-    fetchServices()
-    refreshAppointments()
+    fetchBarbers(); fetchServices(); refreshAppointments();
+    setReviews([{ id: 1, client: 'Juan M.', stars: 5, comment: 'El mejor fade de Port St. Lucie' }]);
+    setWaitlist([]);
   }, [])
 
   const fetchBarbers = () => fetch(`${API_URL}/barbers`).then(r => r.json()).then(setBarbers)
   const fetchServices = () => fetch(`${API_URL}/services`).then(r => r.json()).then(setServices)
   const refreshAppointments = () => fetch(`${API_URL}/appointments`).then(r => r.json()).then(setAppointments)
 
-  // --- LÓGICA DE DISPONIBILIDAD ---
-  const checkAvailability = (time: string) => {
-    if (!selectedBarber || !selectedDate) return true;
+  // ==========================================
+  // 2. NUEVO: FORMATO AUTOMÁTICO DE TELÉFONO (XXX-XXX-XXXX)
+  // ==========================================
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // 1. Quitar todo lo que no sea número
+    const onlyNums = e.target.value.replace(/\D/g, ''); 
+    let formatted = onlyNums;
 
-    // A. ENCONTRAR BARBERO Y SU DÍA LIBRE
+    // 2. Poner los guiones automáticamente
+    if (onlyNums.length <= 3) {
+      formatted = onlyNums;
+    } else if (onlyNums.length <= 6) {
+      formatted = `${onlyNums.slice(0, 3)}-${onlyNums.slice(3)}`;
+    } else {
+      formatted = `${onlyNums.slice(0, 3)}-${onlyNums.slice(3, 6)}-${onlyNums.slice(6, 10)}`;
+    }
+    setPhone(formatted);
+  };
+
+  const to12h = (time24: string) => {
+    const [h, m] = time24.split(':')
+    const hour = parseInt(h)
+    const ampm = hour >= 12 ? 'PM' : 'AM'
+    return `${hour % 12 || 12}:${m} ${ampm}`
+  }
+
+  // ==========================================
+  // 3. DETECTOR EXACTO DE ESTADO DEL DÍA
+  // ==========================================
+  const getDayStatus = () => {
+    if (!selectedBarber || !selectedDate) return 'HIDDEN'; 
+
     const barberObj = barbers.find(b => b.id == selectedBarber);
-    if (!barberObj) return true;
+    if (!barberObj) return 'HIDDEN';
 
-    // "Desencriptar" el día libre (ej: "Darwin|1" -> 1)
+    // A. ¿Es el día libre fijo del barbero? (Usamos T12:00 para evitar error de zona horaria)
+    const dateObj = new Date(`${selectedDate}T12:00:00`); 
+    const dayOfWeek = dateObj.getDay();
     const parts = barberObj.name.split('|');
     const dayOffCode = parts.length > 1 ? parseInt(parts[1]) : -1;
+    
+    if (dayOfWeek === dayOffCode) return 'DAY_OFF';
 
-    // B. VERIFICAR SI LA FECHA SELECCIONADA ES SU DÍA LIBRE
-    const dayOfWeek = new Date(`${selectedDate}T00:00:00`).getDay();
+    // B. ¿Es un día bloqueado por Vacaciones/Enfermedad?
+    const blockedAppt = appointments.find(appt => {
+      const isSameBarber = appt.barberId == selectedBarber;
+      const isBlock = appt.clientName.includes('⛔');
+      // Convertir fecha de base de datos a YYYY-MM-DD local
+      const apptDateStr = new Date(appt.date).toLocaleDateString('en-CA'); 
+      return (isSameBarber && isBlock && apptDateStr === selectedDate);
+    });
 
-    if (dayOfWeek === dayOffCode) {
-      return false; // BLOQUEADO: Es su día de descanso
+    if (blockedAppt) {
+      const reason = blockedAppt.clientName.toUpperCase();
+      if (reason.includes('VACACIONES')) return 'VACACIONES';
+      if (reason.includes('ENFERMEDAD')) return 'ENFERMEDAD';
+      return 'CERRADO';
     }
 
-    // C. VERIFICAR CITAS EXISTENTES
-    const slotDate = new Date(`${selectedDate}T${time}`);
+    return 'OPEN';
+  }
+
+  // Verificador individual de horas (Pasado / Ocupado)
+  const checkTimeSlot = (time: string) => {
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    const [th, tm] = time.split(':').map(Number);
+    const slotDate = new Date(y, m - 1, d, th, tm);
+    
+    // Si la hora ya pasó:
+    if (slotDate < new Date()) return { available: false, reason: 'Pasado' };
+
+    // Si choca con otra cita normal:
     const isBusy = appointments.some(appt => {
-      if (appt.barberId != selectedBarber) return false;
+      if (appt.barberId != selectedBarber || appt.clientName.includes('⛔')) return false;
       const start = new Date(appt.date);
-      const end = appt.endDate ? new Date(appt.endDate) : new Date(start.getTime() + 30*60000); 
+      const end = new Date(start.getTime() + 30 * 60000); 
       return slotDate >= start && slotDate < end;
     });
 
-    return !isBusy;
+    if (isBusy) return { available: false, reason: 'Ocupado' };
+    return { available: true, reason: '' };
   }
 
-  // --- NUEVA LÓGICA CON WHATSAPP ---
+  // ==========================================
+  // 4. WHATSAPP & RESERVA
+  // ==========================================
   const handleBooking = async () => {
-    // 1. Validar datos
-    if (!selectedBarber || !selectedService || !selectedDate || !selectedTime || !name) {
-      alert("⚠️ Faltan datos (Elige barbero, servicio, día, hora y tu nombre)")
-      return
+    if (!selectedBarber || !selectedService || !selectedDate || !selectedTime || !name || phone.length < 12) {
+      alert("⚠️ Completa todos los datos y asegúrate de que el teléfono esté completo (10 dígitos)."); return;
     }
-    const finalDate = new Date(`${selectedDate}T${selectedTime}`)
-    
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    const [th, tm] = selectedTime.split(':').map(Number);
+    const finalDate = new Date(y, m - 1, d, th, tm);
+
     try {
-      // 2. Guardar en servidor
       const response = await fetch(`${API_URL}/appointments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          barberId: selectedBarber,
-          serviceId: selectedService,
-          clientName: name,
-          clientPhone: phone,
-          date: finalDate 
-        }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ barberId: selectedBarber, serviceId: selectedService, clientName: name, clientPhone: phone, date: finalDate }),
       })
-      const data = await response.json() 
-      
       if (response.ok) {
-        // --- 3. ABRIR WHATSAPP ---
         const serviceObj = services.find(s => s.id == selectedService);
-        const serviceName = serviceObj ? serviceObj.name : 'Corte';
-        
-        const mensaje = `Hola! Soy *${name}*. Acabo de reservar en la web:
-📅 *Fecha:* ${selectedDate}
-⏰ *Hora:* ${selectedTime}
-✂️ *Servicio:* ${serviceName}
-
-¿Me confirmas la cita?`;
-
-        // TU NÚMERO DE TELÉFONO
-        const tuNumeroTelefono = "15615246564"; 
-
-        const url = `https://wa.me/${tuNumeroTelefono}?text=${encodeURIComponent(mensaje)}`;
-        window.open(url, '_blank');
-        
-        // --- FINALIZAR ---
-        alert("✅ ¡Reserva enviada! Se abrirá WhatsApp para confirmar.")
-        setName('')
-        setPhone('')
-        refreshAppointments() 
-      } else {
-        alert(data.error || "❌ Hubo un error al reservar")
-      }
-    } catch (error) {
-      console.error(error)
-      alert("Error de conexión")
-    }
+        const mensaje = `Hola! Soy *${name}*. Reservé:\n📅 ${selectedDate}\n⏰ ${to12h(selectedTime)}\n✂️ ${serviceObj?.name}\n\n¿Me confirmas?`;
+        window.open(`https://wa.me/15615246564?text=${encodeURIComponent(mensaje)}`, '_blank');
+        alert("✅ Cita Creada."); setName(''); setPhone(''); refreshAppointments();
+      } else { alert("❌ Error. Alguien pudo haber tomado el turno.") }
+    } catch (e) { alert("Error de conexión") }
   }
 
-  // --- FUNCIONES DE ADMIN ---
-
-  const hireBarber = async () => {
-    if (!newBarberName) return alert('Escribe un nombre')
-    
-    // TRUCO: Guardamos "Darwin|1"
-    const nameWithCode = `${newBarberName}|${newBarberDayOff}`
-
-    await fetch(`${API_URL}/barbers`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: nameWithCode })
-    })
-    setNewBarberName('')
-    fetchBarbers() 
+  const joinWaitlist = () => {
+    if (!name || phone.length < 12 || !selectedDate) return alert("Pon nombre, teléfono completo y fecha.");
+    const newEntry = { id: Date.now(), name, phone, date: selectedDate };
+    setWaitlist([...waitlist, newEntry]);
+    alert(`✅ ${name}, estás en lista de espera para el ${selectedDate}.`); setName(''); setPhone('');
+  }
+  // ==========================================
+  // 5. FUNCIONES ADMIN
+  // ==========================================
+  const hireBarber = async () => { if (!newBarberName) return; await fetch(`${API_URL}/barbers`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name: `${newBarberName}|${newBarberDayOff}` }) }); setNewBarberName(''); fetchBarbers() }
+  const fireBarber = async (id: any) => { if (confirm('¿Despedir?')) { await fetch(`${API_URL}/barbers/${id}`, { method: 'DELETE' }); fetchBarbers() } }
+  
+  const blockDay = async (barberId: any, reason: string) => {
+    if(!blockDateInput) return alert('Selecciona una fecha en la ZONA DE BLOQUEO (Admin)');
+    const [y, m, d] = blockDateInput.split('-').map(Number);
+    const start = new Date(y, m - 1, d, 9, 0); 
+    await fetch(`${API_URL}/appointments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ barberId: barberId, serviceId: services[0]?.id || 1, clientName: `⛔ ${reason.toUpperCase()}`, clientPhone: '000', date: start }), });
+    alert(`✅ ${reason} registrada.`); refreshAppointments();
   }
 
-  const fireBarber = async (id: any) => {
-    if (!confirm('¿Seguro que quieres despedir a este barbero?')) return
-    await fetch(`${API_URL}/barbers/${id}`, { method: 'DELETE' })
-    fetchBarbers() 
-  }
+  const handleDelete = async (id: any) => { if (confirm('¿Borrar?')) { await fetch(`${API_URL}/appointments/${id}`, { method: 'DELETE' }); refreshAppointments() } }
+  const addService = async () => { if (!newServiceName) return; await fetch(`${API_URL}/services`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name: newServiceName, price: newServicePrice, duration: 30 }) }); setNewServiceName(''); setNewServicePrice(''); fetchServices() }
+  const deleteService = async (id: any) => { if (confirm('¿Borrar?')) { await fetch(`${API_URL}/services/${id}`, { method: 'DELETE' }); fetchServices() } }
 
-  const blockDay = async (barberId: any, dateVal: string, reason: string) => {
-    if(!dateVal) return alert('Selecciona una fecha primero');
-    if(!confirm(`¿Bloquear el día ${dateVal} por ${reason}?`)) return;
+  // ==========================================
+  // 6. INTELIGENCIA Y FINANZAS
+  // ==========================================
+  const now = new Date();
+  const todayStr = now.toLocaleDateString('en-CA');
+  
+  // Variables para la vista del Cliente
+  const dayStatus = getDayStatus(); 
+  const isDayFull = dayStatus === 'OPEN' && timeSlots.filter(t => checkTimeSlot(t).available).length === 0;
 
-    // Cita falsa de 9 AM
-    const start = new Date(`${dateVal}T09:00:00`);
-    const fakeServiceId = services.length > 0 ? services[0].id : 1; 
-    
-    await fetch(`${API_URL}/appointments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          barberId: barberId,
-          serviceId: fakeServiceId, 
-          clientName: `⛔ ${reason.toUpperCase()}`, 
-          clientPhone: '000',
-          date: start
-        }),
-      });
-      alert('Bloqueo creado');
-      refreshAppointments();
-  }
+  const activeAppointments = appointments.filter(a => new Date(a.date) >= now && !a.clientName.includes('⛔'));
+  const pastAppointments = appointments.filter(a => new Date(a.date) < now && !a.clientName.includes('⛔'));
+  const blockedDays = appointments.filter(a => a.clientName.includes('⛔'));
 
-  const handleDelete = async (id: any) => {
-    if (!confirm('¿Borrar esta cita?')) return
-    await fetch(`${API_URL}/appointments/${id}`, { method: 'DELETE' })
-    refreshAppointments()
-  }
+  const financialData = appointments.filter(appt => {
+     if(appt.clientName.includes('⛔')) return false;
+     const apptDate = new Date(appt.date);
+     const apptStr = apptDate.toLocaleDateString('en-CA');
+     if (moneyFilter === 'hoy') return apptStr === todayStr;
+     if (moneyFilter === 'semana') { const start = new Date(now); start.setDate(now.getDate() - 7); return apptDate >= start && apptDate <= now; }
+     return true; 
+  });
+  const totalMoney = financialData.reduce((total, cita) => { const service = services.find(s => s.id == cita.serviceId); return total + (service ? parseInt(service.price) : 0); }, 0);
 
-  const addService = async () => {
-    if (!newServiceName || !newServicePrice) return alert('Faltan datos')
-    await fetch(`${API_URL}/services`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        name: newServiceName, 
-        price: newServicePrice,
-        duration: Number(newServiceDuration) 
-      })
-    })
-    setNewServiceName('')
-    setNewServicePrice('')
-    setNewServiceDuration('30') 
-    fetchServices()
-  }
+  const clientDB = Object.values(appointments.reduce((acc:any, appt) => {
+    if (appt.clientName.includes('⛔')) return acc;
+    const p = appt.clientPhone || 'Sin Tlf';
+    if (!acc[p]) acc[p] = { name: appt.clientName, phone: p, visits: 0, spent: 0 };
+    acc[p].visits += 1;
+    const s = services.find(x => x.id == appt.serviceId); acc[p].spent += (s ? parseInt(s.price) : 0);
+    return acc;
+  }, {})).sort((a:any, b:any) => b.visits - a.visits);
 
-  const deleteService = async (id: any) => {
-    if (!confirm('¿Borrar servicio?')) return
-    await fetch(`${API_URL}/services/${id}`, { method: 'DELETE' })
-    fetchServices()
-  }
-
-  // --- HTML ---
+  // ==========================================
+  // 7. INTERFAZ GRÁFICA (UI)
+  // ==========================================
   return (
-    <div style={styles.container}>
-      
+    <div className="container">
       {/* HEADER */}
-      <div style={{textAlign: 'center', marginBottom: '30px'}}>
-        <h1 style={{fontSize: '2.5rem', margin: '0'}}>💈 BARBER PRO 💈</h1>
-        <p style={{color: '#888'}}>Sistema de Gestión Premium</p>
-        
-        <div style={{background: '#222', display: 'inline-flex', borderRadius: '20px', padding: '5px', marginTop: '10px'}}>
-          <button onClick={() => setView('cliente')} style={view === 'cliente' ? styles.activeTab : styles.tab}>🧔 CLIENTE</button>
-          <button 
-            onClick={() => {
-              const pass = prompt('Contraseña de Admin:')
-              if (pass === '2604') setView('admin')
-              else alert('Contraseña incorrecta')
-            }}
-            style={view === 'admin' ? styles.activeTab : styles.tab}
-          >🛡️ ADMIN</button>
+      <div className="header-container">
+        <h1 className="brand-title">ELITE CUTS</h1>
+        <p className="brand-subtitle">STUDIO & BARBERSHOP</p>
+        <div className="nav-wrapper">
+           <div className="nav-container">
+             <button onClick={() => setView('cliente')} className={`nav-btn ${view === 'cliente' ? 'active' : ''}`}>RESERVAR</button>
+             <button onClick={() => { if(prompt('Clave:') === '2604') setView('admin') }} className={`nav-btn ${view === 'admin' ? 'active' : ''}`}>ADMIN</button>
+           </div>
         </div>
       </div>
 
       {/* VISTA CLIENTE */}
       {view === 'cliente' && (
-        <div style={styles.card}>
-          <h2>Nueva Reserva</h2>
+        <div className="card">
+          <h2 className="section-title">Tu Cita</h2>
+          <div className="input-group">
+            <label className="label">Especialista</label>
+            <select className="input-field" onChange={e => setSelectedBarber(e.target.value)} value={selectedBarber}>
+              <option value="">Selecciona...</option>
+              {barbers.map((b: any) => <option key={b.id} value={b.id}>{b.name.split('|')[0]}</option>)}
+            </select>
+          </div>
+          <div className="input-group">
+            <label className="label">Servicio</label>
+            <select className="input-field" onChange={e => setSelectedService(e.target.value)} value={selectedService}>
+              <option value="">Selecciona...</option>
+              {services.map((s: any) => <option key={s.id} value={s.id}>{s.name} - ${s.price}</option>)}
+            </select>
+          </div>
           
-          <label style={styles.label}>BARBERO</label>
-          <select style={styles.select} onChange={e => setSelectedBarber(e.target.value)} value={selectedBarber}>
-            <option value="">Selecciona un experto...</option>
-            {barbers.map((b: any) => (
-              // LIMPIEZA VISUAL
-              <option key={b.id} value={b.id}>{b.name.split('|')[0]}</option>
-            ))}
-          </select>
-
-          <label style={styles.label}>SERVICIO</label>
-          <select style={styles.select} onChange={e => setSelectedService(e.target.value)} value={selectedService}>
-            <option value="">Selecciona el corte...</option>
-            {services.map((s: any) => (
-              <option key={s.id} value={s.id}>{s.name} - ${s.price} ({s.duration} min)</option>
-            ))}
-          </select>
-
           <div style={{display: 'flex', gap: '10px'}}>
-            <div style={{flex: 1}}>
-               <label style={styles.label}>DÍA</label>
-               <input type="date" min={new Date().toISOString().split('T')[0]} style={styles.input} onChange={e => setSelectedDate(e.target.value)} />
-            </div>
-            <div style={{flex: 1}}>
-               <label style={styles.label}>HORA</label>
-               <select style={styles.select} onChange={e => setSelectedTime(e.target.value)}>
-                 <option value="">Selecciona hora...</option>
-                 {timeSlots.map(time => {
-                   const isAvailable = checkAvailability(time);
-                   const [h, m] = time.split(':')
-                   const hour = parseInt(h)
-                   const ampm = hour >= 12 ? 'PM' : 'AM'
-                   const hour12 = hour % 12 || 12
-                   const displayTime = `${hour12}:${m} ${ampm}`
-                   return (
-                     <option key={time} value={time} disabled={!isAvailable} style={!isAvailable ? {color: '#ff4444'} : {}}>
-                       {displayTime} {isAvailable ? '' : '(Ocupado)'}
+             <div className="input-group" style={{flex:1}}>
+               <label className="label">FECHA</label>
+               <input type="date" className="input-field" min={todayStr} onChange={e => setSelectedDate(e.target.value)} />
+             </div>
+             
+             {/* 🛑 AQUI ESTÁ LA MAGIA DE LOS BLOQUEOS VISUALES */}
+             <div className="input-group" style={{flex:1}}>
+               <label className="label">HORA</label>
+               
+               {dayStatus === 'DAY_OFF' && <div style={{background:'#500', color:'white', padding:'12px', borderRadius:'6px', textAlign:'center', fontWeight:'bold', border:'1px solid red'}}>🛑 DAY OFF</div>}
+               {dayStatus === 'VACACIONES' && <div style={{background:'#004', color:'white', padding:'12px', borderRadius:'6px', textAlign:'center', fontWeight:'bold', border:'1px solid #4da6ff'}}>✈️ VACACIONES</div>}
+               {dayStatus === 'ENFERMEDAD' && <div style={{background:'#530', color:'white', padding:'12px', borderRadius:'6px', textAlign:'center', fontWeight:'bold', border:'1px solid orange'}}>🤒 ENFERMEDAD</div>}
+               {dayStatus === 'CERRADO' && <div style={{background:'#333', color:'white', padding:'12px', borderRadius:'6px', textAlign:'center', fontWeight:'bold'}}>⛔ CERRADO</div>}
+
+               {/* Si está abierto, mostramos la lista de horas con los que ya pasaron bloqueados */}
+               {dayStatus === 'OPEN' && (
+                 <select className="input-field" onChange={e => setSelectedTime(e.target.value)}>
+                   <option value="">...</option>
+                   {timeSlots.map(time => {
+                     const status = checkTimeSlot(time);
+                     return <option key={time} value={time} disabled={!status.available} style={!status.available ? {color:'red'} : {}}>
+                       {to12h(time)} {!status.available ? `(${status.reason})` : ''}
                      </option>
-                   )
-                 })}
-               </select>
-            </div>
+                   })}
+                 </select>
+               )}
+               {dayStatus === 'HIDDEN' && <div style={{color:'#666', fontSize:'0.8rem', padding:'12px'}}>Selecciona fecha...</div>}
+             </div>
           </div>
 
-          <label style={styles.label}>TU NOMBRE</label>
-          <input style={styles.input} placeholder="Tu nombre completo" value={name} onChange={e => setName(e.target.value)} />
-          <label style={styles.label}>TELÉFONO</label>
-          <input style={styles.input} placeholder="(555) 000-0000" value={phone} onChange={e => setPhone(e.target.value)} />
-          <button style={styles.mainButton} onClick={handleBooking}>🔥 RESERVAR Y CONFIRMAR</button>
+          <div className="input-group">
+             <label className="label">DATOS PERSONALES</label>
+             <input className="input-field" placeholder="Nombre completo" value={name} onChange={e => setName(e.target.value)} style={{marginBottom:'5px'}}/>
+             {/* 📞 INPUT DE TELÉFONO CON MÁSCARA AUTOMÁTICA */}
+             <input 
+               className="input-field" 
+               placeholder="561-XXX-XXXX" 
+               value={phone} 
+               onChange={handlePhoneChange} 
+               maxLength={12} 
+             />
+          </div>
+
+          {dayStatus !== 'OPEN' || isDayFull ? (
+            <div style={{background:'#220000', padding:'15px', borderRadius:'8px', textAlign:'center'}}>
+              <p style={{color:'#ff4444', fontWeight:'bold', margin:'0 0 10px 0'}}>⚠️ Día Lleno o Cerrado</p>
+              <button className="btn-small btn-action" onClick={joinWaitlist}>➕ Lista de Espera</button>
+            </div>
+          ) : (
+            <button className="btn-gold" onClick={handleBooking}>CONFIRMAR CITA</button>
+          )}
+
+          {/* REVIEWS */}
+          <div style={{marginTop:'30px', borderTop:'1px solid #333', paddingTop:'20px'}}>
+            <label className="label">Últimas Valoraciones</label>
+            {reviews.map(r => (<div key={r.id} style={{fontSize:'0.8rem', color:'#aaa', marginBottom:'5px'}}><b style={{color:'var(--gold)'}}>{"★".repeat(r.stars)}</b> {r.client}: "{r.comment}"</div>))}
+          </div>
         </div>
       )}
 
       {/* VISTA ADMIN */}
       {view === 'admin' && (
         <>
-          <div style={styles.card}>
-            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-              <h2>Agenda en Vivo 📅</h2>
-              <button onClick={refreshAppointments} style={styles.button}>🔄 Actualizar</button>
-            </div>
-            {/* Lista de citas */}
-            <div style={{marginTop: '20px'}}>
-              {appointments.length === 0 ? <p style={{color: '#666'}}>No hay citas aún.</p> : null}
-              {appointments.map((cita: any) => (
-                <div key={cita.id} style={{display: 'flex', padding: '10px', borderBottom: '1px solid #333', alignItems: 'center', justifyContent:'space-between'}}>
-                   <div>
-                      <span style={{color: '#4CAF50', fontWeight: 'bold'}}>
-                        {new Date(cita.date).toLocaleDateString()} - {new Date(cita.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                      </span>
-                      <br/>
-                      {cita.clientName.includes('⛔') 
-                        ? <b style={{color:'orange'}}>{cita.clientName}</b> 
-                        : `${cita.clientName} (${cita.service?.name})`
-                      }
-                   </div>
-                   <button onClick={() => handleDelete(cita.id)} style={{background: 'red', border: 'none', padding: '5px', borderRadius: '4px'}}>🗑️</button>
-                </div>
-              ))}
-            </div>
+          <div className="filters-container">{['hoy', 'semana', 'total'].map(f => (<button key={f} onClick={()=>setMoneyFilter(f)} className={`filter-btn ${moneyFilter===f?'active':''}`}>{f.toUpperCase()}</button>))}</div>
+          <div className="stats-grid">
+             <div className="stat-box gold"><h3 className="stat-number">${totalMoney}</h3><span className="stat-label">Ingresos</span></div>
+             <div className="stat-box dark"><h3 className="stat-number" style={{color:'white'}}>{financialData.length}</h3><span className="stat-label" style={{color:'#888'}}>Citas</span></div>
+          </div>
+          
+          {/* Citas y Bloqueos */}
+          <div className="card">
+             <div className="section-title"><h3 style={{margin:0}}>🟢 Citas Activas</h3></div>
+             {activeAppointments.map((c: any) => (<div key={c.id} className="crm-item"><div><span className="crm-name">{new Date(c.date).toLocaleDateString()} {to12h(new Date(c.date).toLocaleTimeString([], {hour12:false}))} - {c.clientName}</span><span className="crm-detail">{c.service?.name} ({c.clientPhone})</span></div><button onClick={() => handleDelete(c.id)} className="btn-small btn-danger">X</button></div>))}
           </div>
 
-          <div style={styles.card}>
-             <h3>💈 Equipo y Días Libres</h3>
+          {/* Lista de Espera */}
+          <div className="card">
+             <div className="section-title"><h3 style={{margin:0}}>🕒 Lista de Espera</h3></div>
+             {waitlist.map((w:any) => (<div key={w.id} className="crm-item"><span className="crm-name">{w.name} ({w.phone}) - {w.date}</span></div>))}
+          </div>
+
+          {/* Equipo y ZONA DE BLOQUEO */}
+          <div className="card">
+             <div className="section-title"><h3 style={{margin:0}}>Equipo & Ausencias</h3></div>
+             <div className="input-group" style={{display:'flex', gap:'5px'}}>
+               <input className="input-field" placeholder="Nuevo..." value={newBarberName} onChange={e => setNewBarberName(e.target.value)}/>
+               <select className="input-field" style={{width:'80px'}} value={newBarberDayOff} onChange={e => setNewBarberDayOff(e.target.value)}>{daysLabels.map((l, i) => <option key={i} value={i}>{l.substring(0,3)}</option>)}</select>
+               <button className="btn-small btn-gold" onClick={hireBarber}>+</button>
+             </div>
              
-             {/* FORMULARIO DE CONTRATACIÓN */}
-             <div style={{display: 'flex', gap: '5px', marginBottom: '15px'}}>
-               <input 
-                 style={{...styles.input, flex: 2}} 
-                 placeholder="Nombre..." 
-                 value={newBarberName} 
-                 onChange={(e) => setNewBarberName(e.target.value)}
-               />
-               <select 
-                  style={{...styles.select, flex: 1.5}} 
-                  value={newBarberDayOff} 
-                  onChange={(e) => setNewBarberDayOff(e.target.value)}
-               >
-                 {daysLabels.map((label, idx) => (
-                   <option key={idx} value={idx}>Libre: {label}</option>
-                 ))}
-               </select>
-               <button style={styles.button} onClick={hireBarber}>➕</button>
+             {/* CAJA MAESTRA DE BLOQUEO */}
+             <div style={{background:'#1a1a1a', padding:'10px', borderRadius:'8px', marginTop:'15px', border:'1px solid #444'}}>
+                <label className="label" style={{color:'orange'}}>⚠️ FECHA A BLOQUEAR</label>
+                <input type="date" className="input-field" onChange={e => setBlockDateInput(e.target.value)} />
              </div>
 
-             {/* LISTA DE BARBEROS */}
-             {barbers.map((b: any) => {
-               const realName = b.name.split('|')[0];
-               const dayCode = b.name.split('|')[1];
-               const dayLabel = dayCode ? daysLabels[parseInt(dayCode)] : 'Ninguno';
+             {barbers.map((b: any) => (
+               <div key={b.id} style={{borderTop:'1px solid #222', padding:'10px 0', marginTop:'10px'}}>
+                 <div style={{display:'flex', justifyContent:'space-between', marginBottom:'5px'}}>
+                   <strong style={{color:'white'}}>{b.name.split('|')[0]}</strong>
+                   <button onClick={() => fireBarber(b.id)} className="btn-small btn-danger">Despedir</button>
+                 </div>
+                 <div style={{display:'flex', gap:'5px'}}>
+                    <button onClick={() => blockDay(b.id, 'Enfermedad')} className="btn-small btn-action" style={{flex:1}}>🤒 Enf</button>
+                    <button onClick={() => blockDay(b.id, 'Vacaciones')} className="btn-small btn-action" style={{flex:1}}>✈️ Vac</button>
+                 </div>
+               </div>
+             ))}
 
-               return (
-                <div key={b.id} style={{borderTop: '1px solid #444', padding: '10px 0', marginTop:'10px'}}>
-                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems:'center'}}>
-                    <span>
-                      <strong>{realName}</strong> 
-                      <span style={{fontSize: '0.8rem', color: '#888', marginLeft: '8px'}}>
-                         (Descansa: {dayLabel})
-                      </span>
-                    </span>
-                    <button onClick={() => fireBarber(b.id)} style={{background: '#ff4444', border: 'none', borderRadius: '5px', padding:'5px 10px', color:'white'}}>Despedir 🗑️</button>
-                  </div>
-                  
-                  {/* GESTIÓN DE EXCEPCIONES */}
-                  <div style={{marginTop: '8px', display:'flex', gap:'5px', alignItems:'center', background:'#222', padding:'5px', borderRadius:'5px'}}>
-                    <span style={{fontSize:'0.7rem', color:'#aaa'}}>Bloquear:</span>
-                    <input type="date" id={`date-${b.id}`} style={{...styles.input, width:'110px', padding:'4px', fontSize:'0.8rem'}} />
-                    <button 
-                      onClick={() => {
-                         const el = document.getElementById(`date-${b.id}`) as HTMLInputElement;
-                         if(el) blockDay(b.id, el.value, 'Enfermedad');
-                      }} 
-                      style={{background: '#FFA500', border:'none', borderRadius:'3px', cursor:'pointer', fontSize:'0.7rem', padding:'4px 8px'}}>
-                      🤒 Enf
-                    </button>
-                    <button 
-                      onClick={() => {
-                         const el = document.getElementById(`date-${b.id}`) as HTMLInputElement;
-                         if(el) blockDay(b.id, el.value, 'Vacaciones');
-                      }}
-                      style={{background: '#00C853', border:'none', borderRadius:'3px', cursor:'pointer', fontSize:'0.7rem', padding:'4px 8px'}}>
-                      ✈️ Vac
-                    </button>
-                  </div>
-                </div>
-               )
-             })}
+             {/* Mostrar fechas bloqueadas */}
+             <div style={{marginTop:'15px', borderTop:'1px solid #333', paddingTop:'10px'}}>
+               <p style={{fontSize:'0.7rem', color:'var(--gold)'}}>DÍAS CERRADOS (MANUAL):</p>
+               {blockedDays.map((c:any) => (
+                 <div key={c.id} style={{display:'flex', justifyContent:'space-between', fontSize:'0.8rem', color:'#ff4444'}}>
+                   <span>{new Date(c.date).toLocaleDateString()} - Barbero {c.barberId}</span>
+                   <button onClick={() => handleDelete(c.id)} style={{background:'none', border:'none', color:'white', cursor:'pointer'}}>Quitar</button>
+                 </div>
+               ))}
+             </div>
           </div>
 
-          {/* SERVICIOS */}
-          <div style={styles.card}>
-            <h3>💰 Servicios</h3>
-            <div style={{display: 'flex', gap: '5px', marginBottom: '10px'}}>
-              <input placeholder="Corte..." style={{...styles.input, flex: 2}} value={newServiceName} onChange={e => setNewServiceName(e.target.value)}/>
-              <input placeholder="$$" type="number" style={{...styles.input, width: '50px'}} value={newServicePrice} onChange={e => setNewServicePrice(e.target.value)}/>
-              <select style={{...styles.select, width: '70px'}} value={newServiceDuration} onChange={e => setNewServiceDuration(e.target.value)}>
-                <option value="15">15m</option>
-                <option value="30">30m</option>
-                <option value="45">45m</option>
-                <option value="60">1h</option>
-              </select>
-              <button style={styles.button} onClick={addService}>➕</button>
+          <div className="card">
+            <div className="section-title"><h3 style={{margin:0}}>Servicios</h3></div>
+            <div className="input-group" style={{display:'flex', gap:'5px'}}>
+              <input className="input-field" placeholder="Corte..." value={newServiceName} onChange={e => setNewServiceName(e.target.value)}/>
+              <input className="input-field" type="number" placeholder="$" style={{width:'60px'}} value={newServicePrice} onChange={e => setNewServicePrice(e.target.value)}/>
+              <button className="btn-small btn-gold" onClick={addService}>+</button>
             </div>
-            {services.map((s:any) => (
-              <div key={s.id} style={{display:'flex', justifyContent:'space-between', padding:'10px', borderBottom:'1px solid #333'}}>
-                <span>{s.name} (${s.price}) - {s.duration} min</span>
-                <button onClick={() => deleteService(s.id)} style={{background:'red', border:'none', borderRadius:'5px', padding:'5px'}}>🗑️</button>
-              </div>
-            ))}
+            {services.map((s:any) => (<div key={s.id} className="crm-item"><span className="crm-name">{s.name} (${s.price})</span><button onClick={() => deleteService(s.id)} className="btn-small btn-danger">X</button></div>))}
+          </div>
+
+          <div className="card">
+             <div className="section-title"><h3 style={{margin:0}}>Clientes Top 👑</h3></div>
+             {clientDB.map((c: any, i) => (<div key={i} className="crm-item"><div><span className="crm-name">{c.name} {i<3?'🏆':''}</span><span className="crm-detail">{c.visits} visitas | ${c.spent}</span></div></div>))}
           </div>
         </>
       )}
     </div>
   )
-}
-
-const styles = {
-  container: { maxWidth: '500px', margin: '0 auto', padding: '20px', fontFamily: 'Arial, sans-serif', color: 'white' },
-  card: { background: '#1a1a1a', padding: '20px', borderRadius: '15px', boxShadow: '0 4px 15px rgba(0,0,0,0.5)', marginBottom: '20px' },
-  label: { display: 'block', fontSize: '0.8rem', color: '#888', marginBottom: '5px', marginTop: '15px' },
-  input: { width: '100%', padding: '12px', background: '#333', border: '1px solid #444', borderRadius: '8px', color: 'white', boxSizing: 'border-box' as const },
-  select: { width: '100%', padding: '12px', background: '#333', border: '1px solid #444', borderRadius: '8px', color: 'white', boxSizing: 'border-box' as const },
-  mainButton: { width: '100%', padding: '15px', background: 'linear-gradient(45deg, #00C853, #64DD17)', border: 'none', borderRadius: '10px', color: 'white', fontWeight: 'bold', marginTop: '25px', cursor: 'pointer' },
-  button: { padding: '10px 15px', background: '#007AFF', border: 'none', borderRadius: '8px', color: 'white', fontWeight: 'bold', cursor: 'pointer' },
-  tab: { padding: '10px', background: 'transparent', border: 'none', color: '#666', fontWeight: 'bold', cursor: 'pointer' },
-  activeTab: { padding: '10px', background: '#007AFF', border: 'none', borderRadius: '15px', color: 'white', fontWeight: 'bold', cursor: 'pointer' }
 }
 
 export default App

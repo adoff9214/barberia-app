@@ -1,42 +1,102 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
+/* FUENTES */
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600&family=Playfair+Display:wght@700&display=swap');
+
+:root {
+  --gold: #D4AF37;
+  --dark-bg: #000000;
+  --panel-bg: #111111;
+  --text-main: #ffffff;
+}
+
+body {
+  background-color: var(--dark-bg);
+  color: var(--text-main);
+  font-family: 'Montserrat', sans-serif;
+  margin: 0;
+  padding: 20px; /* Espacio alrededor */
+}
+
+/* AQUÍ ESTÁ EL ARREGLO: Márgenes automáticos en lugar de Flexbox */
+.container {
+  max-width: 500px;
+  margin: 0 auto; /* Esto centra la caja automáticamente */
+  background: var(--panel-bg);
+  border: 1px solid #333;
+  border-radius: 15px;
+  padding: 20px;
+  box-shadow: 0 0 20px rgba(212, 175, 55, 0.1);
+}
+
+/* HEADER */
+.brand-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 2.5rem;
+  color: var(--gold);
   text-align: center;
+  margin: 0;
+  text-shadow: 0 4px 10px rgba(212, 175, 55, 0.3);
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
-}
-
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
-}
-
-.card {
-  padding: 2em;
-}
-
-.read-the-docs {
+.brand-subtitle {
   color: #888;
+  font-size: 0.8rem;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  text-align: center;
+  margin-bottom: 30px;
+  display: block;
 }
+
+/* TARJETAS INTERNAS */
+.card {
+  background: #000;
+  border: 1px solid #333;
+  border-left: 3px solid var(--gold);
+  border-radius: 10px;
+  padding: 15px;
+  margin-bottom: 20px;
+}
+
+.section-title {
+  font-family: 'Playfair Display', serif;
+  border-bottom: 1px solid #333;
+  padding-bottom: 10px;
+  margin-bottom: 15px;
+  margin-top: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* INPUTS */
+.input-group { margin-bottom: 15px; }
+.label { display: block; color: var(--gold); font-size: 0.7rem; font-weight: bold; margin-bottom: 5px; }
+.input-field { width: 100%; padding: 12px; background: #1a1a1a; border: 1px solid #444; color: white; border-radius: 5px; box-sizing: border-box; }
+.input-field:focus { border-color: var(--gold); outline: none; }
+
+/* BOTONES */
+.btn-gold { width: 100%; padding: 15px; background: linear-gradient(45deg, var(--gold), #997b1e); border: none; color: black; font-weight: bold; border-radius: 5px; cursor: pointer; margin-top: 10px; }
+.btn-small { padding: 5px 10px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; font-size: 0.8rem; }
+.btn-action { background: #333; color: white; border: 1px solid #555; }
+.btn-danger { background: #400; color: #ff5555; border: 1px solid #ff5555; }
+
+/* NAVEGACIÓN */
+.nav-wrapper { text-align: center; margin-bottom: 20px; }
+.nav-container { display: inline-flex; background: #000; border-radius: 20px; padding: 5px; border: 1px solid #333; }
+.nav-btn { background: transparent; border: none; color: #666; padding: 8px 20px; cursor: pointer; font-weight: bold; border-radius: 15px; }
+.nav-btn.active { background: var(--gold); color: black; }
+
+/* ESTADÍSTICAS */
+.stats-grid { display: flex; gap: 10px; margin-bottom: 20px; }
+.stat-box { flex: 1; padding: 15px; text-align: center; border-radius: 8px; }
+.stat-box.gold { background: var(--gold); color: black; }
+.stat-box.dark { background: #000; border: 1px solid #333; }
+.stat-number { font-size: 1.5rem; font-weight: bold; margin: 0; }
+.filters-container { display: flex; justify-content: center; gap: 10px; margin-bottom: 15px; }
+.filter-btn { background: transparent; border: 1px solid #444; color: #aaa; padding: 5px 12px; border-radius: 15px; cursor: pointer; font-size: 0.8rem; }
+.filter-btn.active { background: var(--gold); color: black; border-color: var(--gold); font-weight: bold; }
+
+/* LISTAS */
+.crm-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #222; align-items: center; }
+.crm-name { font-weight: bold; color: white; display: block; }
+.crm-detail { font-size: 0.8rem; color: #888; }
