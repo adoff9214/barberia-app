@@ -48,21 +48,14 @@ function App() {
   const refreshAppointments = () => fetch(`${API_URL}/appointments`).then(r => r.json()).then(setAppointments)
 
   // ==========================================
-  // 2. NUEVO: FORMATO AUTOMÁTICO DE TELÉFONO (XXX-XXX-XXXX)
+  // 2. FORMATO AUTOMÁTICO DE TELÉFONO (XXX-XXX-XXXX)
   // ==========================================
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // 1. Quitar todo lo que no sea número
     const onlyNums = e.target.value.replace(/\D/g, ''); 
     let formatted = onlyNums;
-
-    // 2. Poner los guiones automáticamente
-    if (onlyNums.length <= 3) {
-      formatted = onlyNums;
-    } else if (onlyNums.length <= 6) {
-      formatted = `${onlyNums.slice(0, 3)}-${onlyNums.slice(3)}`;
-    } else {
-      formatted = `${onlyNums.slice(0, 3)}-${onlyNums.slice(3, 6)}-${onlyNums.slice(6, 10)}`;
-    }
+    if (onlyNums.length <= 3) formatted = onlyNums;
+    else if (onlyNums.length <= 6) formatted = `${onlyNums.slice(0, 3)}-${onlyNums.slice(3)}`;
+    else formatted = `${onlyNums.slice(0, 3)}-${onlyNums.slice(3, 6)}-${onlyNums.slice(6, 10)}`;
     setPhone(formatted);
   };
 
@@ -74,7 +67,7 @@ function App() {
   }
 
   // ==========================================
-  // 3. DETECTOR EXACTO DE ESTADO DEL DÍA
+  // 3. DETECTOR EXACTO DE ESTADO DEL DÍA (CORREGIDO PARA DOMINGOS)
   // ==========================================
   const getDayStatus = () => {
     if (!selectedBarber || !selectedDate) return 'HIDDEN'; 
@@ -82,19 +75,22 @@ function App() {
     const barberObj = barbers.find(b => b.id == selectedBarber);
     if (!barberObj) return 'HIDDEN';
 
-    // A. ¿Es el día libre fijo del barbero? (Usamos T12:00 para evitar error de zona horaria)
-    const dateObj = new Date(`${selectedDate}T12:00:00`); 
-    const dayOfWeek = dateObj.getDay();
+    // A. ¿Es el día libre fijo del barbero? (CORRECCIÓN HUSO HORARIO)
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    const dateObj = new Date(y, m - 1, d); // Fecha local exacta a medianoche
+    const dayOfWeek = dateObj.getDay(); // 0 = Domingo, 1 = Lunes...
+    
     const parts = barberObj.name.split('|');
     const dayOffCode = parts.length > 1 ? parseInt(parts[1]) : -1;
     
+    // Si el día del calendario es el día de descanso del barbero:
     if (dayOfWeek === dayOffCode) return 'DAY_OFF';
 
     // B. ¿Es un día bloqueado por Vacaciones/Enfermedad?
     const blockedAppt = appointments.find(appt => {
       const isSameBarber = appt.barberId == selectedBarber;
       const isBlock = appt.clientName.includes('⛔');
-      // Convertir fecha de base de datos a YYYY-MM-DD local
+      // Comparar fechas de manera segura sin horas
       const apptDateStr = new Date(appt.date).toLocaleDateString('en-CA'); 
       return (isSameBarber && isBlock && apptDateStr === selectedDate);
     });
@@ -161,6 +157,7 @@ function App() {
     setWaitlist([...waitlist, newEntry]);
     alert(`✅ ${name}, estás en lista de espera para el ${selectedDate}.`); setName(''); setPhone('');
   }
+
   // ==========================================
   // 5. FUNCIONES ADMIN
   // ==========================================
@@ -211,7 +208,6 @@ function App() {
     const s = services.find(x => x.id == appt.serviceId); acc[p].spent += (s ? parseInt(s.price) : 0);
     return acc;
   }, {})).sort((a:any, b:any) => b.visits - a.visits);
-
   // ==========================================
   // 7. INTERFAZ GRÁFICA (UI)
   // ==========================================
@@ -254,7 +250,7 @@ function App() {
                <input type="date" className="input-field" min={todayStr} onChange={e => setSelectedDate(e.target.value)} />
              </div>
              
-             {/* 🛑 AQUI ESTÁ LA MAGIA DE LOS BLOQUEOS VISUALES */}
+             {/* 🛑 MAGIA DE LOS BLOQUEOS VISUALES (INCLUYE EL DOMINGO) */}
              <div className="input-group" style={{flex:1}}>
                <label className="label">HORA</label>
                
@@ -318,7 +314,7 @@ function App() {
              <div className="stat-box dark"><h3 className="stat-number" style={{color:'white'}}>{financialData.length}</h3><span className="stat-label" style={{color:'#888'}}>Citas</span></div>
           </div>
           
-          {/* Citas y Bloqueos */}
+          {/* Citas Activas */}
           <div className="card">
              <div className="section-title"><h3 style={{margin:0}}>🟢 Citas Activas</h3></div>
              {activeAppointments.map((c: any) => (<div key={c.id} className="crm-item"><div><span className="crm-name">{new Date(c.date).toLocaleDateString()} {to12h(new Date(c.date).toLocaleTimeString([], {hour12:false}))} - {c.clientName}</span><span className="crm-detail">{c.service?.name} ({c.clientPhone})</span></div><button onClick={() => handleDelete(c.id)} className="btn-small btn-danger">X</button></div>))}
@@ -370,6 +366,7 @@ function App() {
              </div>
           </div>
 
+          {/* Servicios */}
           <div className="card">
             <div className="section-title"><h3 style={{margin:0}}>Servicios</h3></div>
             <div className="input-group" style={{display:'flex', gap:'5px'}}>
@@ -380,6 +377,7 @@ function App() {
             {services.map((s:any) => (<div key={s.id} className="crm-item"><span className="crm-name">{s.name} (${s.price})</span><button onClick={() => deleteService(s.id)} className="btn-small btn-danger">X</button></div>))}
           </div>
 
+          {/* Clientes Top */}
           <div className="card">
              <div className="section-title"><h3 style={{margin:0}}>Clientes Top 👑</h3></div>
              {clientDB.map((c: any, i) => (<div key={i} className="crm-item"><div><span className="crm-name">{c.name} {i<3?'🏆':''}</span><span className="crm-detail">{c.visits} visitas | ${c.spent}</span></div></div>))}
